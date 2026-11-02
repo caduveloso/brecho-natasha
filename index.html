@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Brechó da Natasha</title>
+    <meta name="description" content="Peças selecionadas com cuidado: roupas e acessórios de qualidade, em ótimo estado, para um guarda-roupa elegante e atemporal." />
+    <meta name="theme-color" content="#f6f2ec" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="Brechó da Natasha" />
+    <meta property="og:description" content="Peças selecionadas com cuidado, para um guarda-roupa elegante e atemporal." />
+    <link rel="icon" href="assets/icone.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Jost:wght@300;400;500&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/base.css" />
+    <link rel="stylesheet" href="css/loja.css" />
+  </head>
+  <body>
+    <a class="sr" href="#conteudo">Ir para o conteúdo</a>
+
+    <div class="faixa" id="faixa">Peças únicas &nbsp;·&nbsp; Curadoria cuidadosa &nbsp;·&nbsp; Envio para todo o Brasil</div>
+
+    <header class="topo" id="topo">
+      <div class="topo-interno">
+        <button class="icone-botao so-celular" id="abrir-menu" aria-label="Abrir menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18M3 12h18M3 17h18" /></svg>
+        </button>
+        <nav class="menu-principal" id="menu-principal" aria-label="Principal">
+          <a href="#/colecao" data-rota="colecao">Coleção</a>
+          <a href="#/colecao?ordem=recentes" data-rota="novidades">Novidades</a>
+          <a href="#/sobre" data-rota="sobre">Sobre</a>
+        </nav>
+        <a href="#/" class="logo" id="logo" aria-label="Página inicial"></a>
+        <div class="acoes-topo">
+          <button class="icone-botao" id="abrir-busca" aria-label="Buscar">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+          </button>
+          <button class="icone-botao sacola-botao" id="abrir-sacola" aria-label="Abrir sacola">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 8h14l-1.2 12.2a1 1 0 0 1-1 .8H7.2a1 1 0 0 1-1-.8L5 8Z" /><path d="M9 8V6.5a3 3 0 0 1 6 0V8" /></svg>
+            <span class="contador oculto" id="contador-sacola">0</span>
+          </button>
+        </div>
+      </div>
+      <form class="busca" id="busca" role="search" hidden>
+        <label class="sr" for="campo-busca">Buscar peças</label>
+        <input id="campo-busca" type="search" placeholder="Buscar por peça, marca ou cor" autocomplete="off" />
+        <button type="submit" class="botao pequeno">Buscar</button>
+      </form>
+    </header>
+
+    <div class="menu-celular" id="menu-celular" hidden>
+      <div class="menu-celular-painel">
+        <button class="icone-botao fechar" id="fechar-menu" aria-label="Fechar menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+        <nav id="menu-celular-links"></nav>
+      </div>
+    </div>
+
+    <main id="conteudo" tabindex="-1"></main>
+
+    <footer class="rodape">
+      <div class="rodape-interno">
+        <div class="rodape-marca">
+          <a href="#/" class="logo logo-rodape" id="logo-rodape"></a>
+          <p id="rodape-slogan"></p>
+        </div>
+        <div class="rodape-col">
+          <span class="rotulo">Loja</span>
+          <a href="#/colecao">Coleção</a>
+          <a href="#/colecao?ordem=recentes">Novidades</a>
+          <a href="#/sobre">Sobre</a>
+        </div>
+        <div class="rodape-col" id="rodape-contato">
+          <span class="rotulo">Contato</span>
+        </div>
+      </div>
+      <div class="rodape-base">
+        <span id="rodape-copy"></span>
+      </div>
+    </footer>
+
+    <div class="sacola-fundo" id="sacola-fundo" hidden></div>
+    <aside class="sacola" id="sacola" aria-label="Sacola" aria-hidden="true">
+      <div class="sacola-topo">
+        <h2 class="serif">Sua sacola</h2>
+        <button class="icone-botao" id="fechar-sacola" aria-label="Fechar sacola">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+        </button>
+      </div>
+      <div class="sacola-itens" id="sacola-itens"></div>
+      <div class="sacola-rodape" id="sacola-rodape"></div>
+    </aside>
+
+    <script src="vendor/supabase-2.118.0.js"></script>
+    <script type="module" src="js/loja.js"></script>
+  </body>
+</html>

@@ -1,0 +1,306 @@
+/* Brechó da Natasha: base visual compartilhada (loja e painel) */
+
+:root {
+  --linho: #f6f2ec;
+  --linho-claro: #fbf9f5;
+  --areia: #ede6db;
+  --pedra: #ddd3c5;
+  --pedra-escura: #c9bcaa;
+  --taupe: #857868;
+  --cafe: #2e2722;
+  --cafe-suave: #4a4038;
+  --argila: #9a6a4f;
+  --argila-escura: #7f553e;
+  --oliva: #6e6b4f;
+  --erro: #9b3d2e;
+  --ok: #56603f;
+
+  --serif: "Cormorant Garamond", "Cormorant", Garamond, "Times New Roman", serif;
+  --sans: "Jost", "Futura", "Avenir Next", "Helvetica Neue", Arial, sans-serif;
+
+  --raio: 2px;
+  --sombra: 0 18px 50px -24px rgba(46, 39, 34, 0.35);
+  --transicao: 220ms cubic-bezier(0.2, 0.6, 0.2, 1);
+  --largura: 1240px;
+  --margem: clamp(16px, 4vw, 40px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--linho);
+  color: var(--cafe);
+  font-family: var(--sans);
+  font-weight: 400;
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 1px solid var(--argila);
+  outline-offset: 3px;
+}
+
+.oculto,
+[hidden] {
+  display: none !important;
+}
+
+.sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.serif {
+  font-family: var(--serif);
+}
+
+.rotulo {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--taupe);
+}
+
+/* Botões */
+.botao {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 28px;
+  border: 1px solid var(--cafe);
+  border-radius: var(--raio);
+  background: var(--cafe);
+  color: var(--linho-claro);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  transition: background var(--transicao), color var(--transicao), border-color var(--transicao);
+}
+
+.botao:hover {
+  background: var(--cafe-suave);
+  border-color: var(--cafe-suave);
+}
+
+.botao:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.botao.contorno {
+  background: transparent;
+  color: var(--cafe);
+}
+
+.botao.contorno:hover {
+  background: var(--cafe);
+  color: var(--linho-claro);
+}
+
+.botao.argila {
+  background: var(--argila);
+  border-color: var(--argila);
+}
+
+.botao.argila:hover {
+  background: var(--argila-escura);
+  border-color: var(--argila-escura);
+}
+
+.botao.pequeno {
+  min-height: 38px;
+  padding: 0 18px;
+  font-size: 11px;
+}
+
+.botao.largo {
+  width: 100%;
+}
+
+.link {
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+  transition: color var(--transicao);
+}
+
+.link:hover {
+  color: var(--argila);
+}
+
+/* Formulários */
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.campo > span {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--taupe);
+}
+
+.campo input,
+.campo select,
+.campo textarea,
+.entrada {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid var(--pedra);
+  border-radius: var(--raio);
+  background: var(--linho-claro);
+  font-size: 15px;
+  transition: border-color var(--transicao), background var(--transicao);
+}
+
+.campo textarea {
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.campo input:focus,
+.campo select:focus,
+.campo textarea:focus,
+.entrada:focus {
+  outline: none;
+  border-color: var(--argila);
+  background: #fff;
+}
+
+.campo select {
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, var(--taupe) 50%),
+    linear-gradient(135deg, var(--taupe) 50%, transparent 50%);
+  background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+  padding-right: 36px;
+}
+
+.aviso {
+  padding: 14px 16px;
+  border-left: 2px solid var(--argila);
+  background: var(--areia);
+  font-size: 14px;
+}
+
+.aviso.erro {
+  border-color: var(--erro);
+  color: var(--erro);
+}
+
+/* Toast */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 200;
+  transform: translate(-50%, 20px);
+  max-width: calc(100vw - 32px);
+  padding: 14px 22px;
+  border-radius: var(--raio);
+  background: var(--cafe);
+  color: var(--linho-claro);
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transicao), transform var(--transicao);
+}
+
+.toast.visivel {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.toast.erro {
+  background: var(--erro);
+}
+
+/* Carregando */
+.girando {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.esqueleto {
+  background: linear-gradient(90deg, var(--areia) 0%, var(--linho-claro) 50%, var(--areia) 100%);
+  background-size: 200% 100%;
+  animation: brilho 1.4s ease-in-out infinite;
+}
+
+@keyframes brilho {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
