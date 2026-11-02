@@ -121,7 +121,7 @@ function preco(v: unknown): number | null {
 }
 
 function normalizar(v: unknown) {
-  return String(v ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+  return String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
 
 function aleatorio() {

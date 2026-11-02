@@ -74,7 +74,7 @@ const centavos = (v: number) => Math.round(v * 100) / 100;
 export function normalizar(texto: unknown): string {
   return String(texto ?? "")
     .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
