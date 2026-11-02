@@ -536,7 +536,8 @@ async function paginaPeca(main, id, codigo) {
         <div class="dobras">
           <details><summary>Envio</summary><p>${escapar(c.envio_info || "Enviamos para todo o Brasil.")}</p></details>
           <details><summary>Retirada</summary><p>${escapar(c.retirada_info || "Retirada combinada pelo WhatsApp.")}</p></details>
-          <details><summary>Como funciona</summary><p>Ao finalizar o pedido, a peça fica reservada para você. Em seguida, combinamos pagamento e entrega pelo WhatsApp.</p></details>
+          <details><summary>Pagamento</summary><p>PIX ou cartão de crédito. Depois do pedido, enviamos pelo WhatsApp a chave PIX ou o link para pagar com cartão.</p></details>
+          <details><summary>Como funciona</summary><p>Ao finalizar o pedido, a peça fica reservada para você. Em seguida, mandamos os dados de pagamento pelo WhatsApp e, assim que o pagamento é confirmado, enviamos a peça ou combinamos a retirada.</p></details>
         </div>
       </div>
     </div>
@@ -598,6 +599,16 @@ async function revalidarSacola() {
 }
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+
+// Por enquanto o pagamento é feito à parte: depois do pedido, a loja manda pelo
+// WhatsApp a chave PIX ou um link para pagar com cartão.
+const NOMES_PAGAMENTO = { pix: "PIX", cartao: "Cartão de crédito" };
+
+function textoDadosPagamento(pagamento) {
+  if (pagamento === NOMES_PAGAMENTO.pix) return "a chave PIX";
+  if (pagamento === NOMES_PAGAMENTO.cartao) return "o link para pagar com cartão";
+  return "os dados de pagamento";
+}
 
 /** Confere os dígitos verificadores do CPF. */
 function cpfValido(cpf) {
@@ -725,6 +736,13 @@ async function paginaFinalizar(main, id) {
             <div class="frete" id="frete" aria-live="polite"></div>
           </div>
         </fieldset>
+        <fieldset>
+          <legend>Pagamento</legend>
+          <div class="opcoes-entrega">
+            <label class="opcao"><input type="radio" name="pagamento" value="pix" ${dados.pagamento !== "cartao" ? "checked" : ""}><strong>PIX</strong><small>Enviamos a chave PIX pelo WhatsApp para você concluir o pagamento.</small></label>
+            <label class="opcao"><input type="radio" name="pagamento" value="cartao" ${dados.pagamento === "cartao" ? "checked" : ""}><strong>Cartão de crédito</strong><small>Enviamos pelo WhatsApp um link para pagar com cartão.</small></label>
+          </div>
+        </fieldset>
         <label class="campo"><span>Observações (opcional)</span><textarea name="observacoes" rows="2"></textarea></label>
         <div class="aviso erro oculto" id="erro-pedido"></div>
         <button class="botao largo" type="submit" id="enviar-pedido">Confirmar pedido</button>
@@ -735,6 +753,7 @@ async function paginaFinalizar(main, id) {
         ${estado.sacola.map((i) => itemSacolaHtml(i, false)).join("")}
         <div class="linha-resumo"><span>Peças</span><span>${formatarPreco(totalDaSacola())}</span></div>
         <div class="linha-resumo"><span>Frete</span><span id="resumo-frete">—</span></div>
+        <div class="linha-resumo"><span>Pagamento</span><span id="resumo-pagamento">${dados.pagamento === "cartao" ? NOMES_PAGAMENTO.cartao : NOMES_PAGAMENTO.pix}</span></div>
         <div class="linha-total"><span>Total</span><strong id="resumo-total">${formatarPreco(totalDaSacola())}</strong></div>
       </aside>
     </div>`;
@@ -790,8 +809,8 @@ async function paginaFinalizar(main, id) {
     $("#resumo-total").textContent = formatarPreco(pecas + (opcao ? opcao.valor : 0));
     $("#nota-pedido").textContent =
       ehEnvio() && !freteACombinar()
-        ? "Ao confirmar, as peças ficam reservadas para você e o pagamento é combinado em seguida pelo WhatsApp."
-        : "Ao confirmar, as peças ficam reservadas para você. Pagamento e entrega são combinados em seguida pelo WhatsApp.";
+        ? "Ao confirmar, as peças ficam reservadas para você e enviamos os dados de pagamento pelo WhatsApp."
+        : "Ao confirmar, as peças ficam reservadas para você. Pelo WhatsApp enviamos os dados de pagamento e combinamos a entrega.";
   }
 
   async function cotar() {
@@ -840,6 +859,9 @@ async function paginaFinalizar(main, id) {
       frete.escolhido = Number(e.target.value);
       atualizarResumo();
     }
+    if (e.target.name === "pagamento") {
+      $("#resumo-pagamento").textContent = NOMES_PAGAMENTO[e.target.value] || NOMES_PAGAMENTO.pix;
+    }
   });
   form.addEventListener("input", () => $("#erro-pedido").classList.add("oculto"));
 
@@ -871,6 +893,9 @@ async function paginaFinalizar(main, id) {
     erro.classList.add("oculto");
     const v = Object.fromEntries(new FormData(form).entries());
     const envio = v.entrega === "envio";
+    const pagamento = NOMES_PAGAMENTO[v.pagamento] || NOMES_PAGAMENTO.pix;
+    // A forma de pagamento escolhida vai na primeira linha das observações do pedido.
+    const observacoes = [`Pagamento: ${pagamento}`, (v.observacoes || "").trim()].filter(Boolean).join("\n");
     const endereco = {
       rua: (v.rua || "").trim(),
       numero: (v.numero || "").trim(),
@@ -907,7 +932,7 @@ async function paginaFinalizar(main, id) {
         "dados-cliente",
         JSON.stringify({
           nome: v.nome, telefone: v.telefone, email: v.email, entrega: v.entrega, cep: v.cep,
-          ...endereco, frete: frete.escolhido,
+          ...endereco, frete: frete.escolhido, pagamento: v.pagamento,
         }),
       );
     } catch {
@@ -929,7 +954,7 @@ async function paginaFinalizar(main, id) {
           pecas: itens.map((i) => i.id),
           dados: {
             nome: v.nome, telefone: v.telefone, email: v.email || "", cpf: v.cpf, cep: v.cep,
-            observacoes: v.observacoes || "", ...endereco,
+            observacoes, ...endereco,
           },
         });
       } else {
@@ -940,7 +965,7 @@ async function paginaFinalizar(main, id) {
           p_entrega: v.entrega,
           p_endereco: textoEndereco,
           p_cep: envio ? v.cep : "",
-          p_observacoes: v.observacoes || "",
+          p_observacoes: observacoes,
           p_pecas: itens.map((i) => i.id),
           p_cpf: envio ? soDigitos(v.cpf) : "",
           p_end: envio ? endereco : null,
@@ -985,6 +1010,7 @@ async function paginaFinalizar(main, id) {
       entrega: v.entrega,
       endereco: envio ? `${textoEndereco} (CEP ${v.cep})` : "",
       frete: comFrete && data.frete ? data.frete : null,
+      pagamento,
     };
     try {
       sessionStorage.setItem(`pedido-${data.numero}`, JSON.stringify(pedido));
@@ -1037,6 +1063,7 @@ function mensagemDoPedido(pedido) {
       pedido.entrega === "envio" ? `Entrega: envio para ${pedido.endereco} (frete a combinar)` : "Entrega: retirada",
     );
   }
+  if (pedido.pagamento) linhas.push(`Pagamento: ${pedido.pagamento}`);
   linhas.push(`Nome: ${pedido.nome}`);
   return linhas.join("\n");
 }
@@ -1052,19 +1079,23 @@ function paginaConfirmacao(main, id, numero) {
   const c = estado.config;
   const temWhats = Boolean(numeroWhatsapp(c.whatsapp));
   const f = pedido?.frete;
-  const combinar = pedido?.entrega === "envio" ? (f ? "" : " e o frete") : " e a retirada";
+  const combinar = !pedido ? "" : pedido.entrega === "envio" ? (f ? "" : " e combinamos o frete") : " e combinamos a retirada";
+  const dadosPagamento = textoDadosPagamento(pedido?.pagamento);
+  const linhaPagamento = pedido?.pagamento
+    ? `<div class="linha-resumo"><span>Pagamento</span><span>${escapar(pedido.pagamento)}</span></div>`
+    : "";
   main.innerHTML = `
     <div class="confirmacao">
       <span class="rotulo">Pedido nº ${escapar(numero)}</span>
       <h1>Obrigada! Suas peças estão reservadas.</h1>
       ${
         pedido && temWhats
-          ? `<p>Para concluir, envie o pedido pelo WhatsApp. Lá combinamos o pagamento${combinar}.</p>
+          ? `<p>Para concluir, envie o pedido pelo WhatsApp. Por lá mandamos ${dadosPagamento}${combinar}.</p>
              <div class="botoes">
                <a class="botao argila" href="${linkWhatsapp(c.whatsapp, mensagemDoPedido(pedido))}" target="_blank" rel="noopener">Enviar pedido pelo WhatsApp</a>
                <a class="link rotulo" href="#/colecao">Continuar olhando</a>
              </div>`
-          : `<p>Recebemos seu pedido e vamos falar com você pelo WhatsApp informado para combinar o pagamento${combinar}.</p>
+          : `<p>Recebemos seu pedido. Vamos chamar você no WhatsApp informado para enviar ${dadosPagamento}${combinar}.</p>
              <div class="botoes"><a class="botao" href="#/colecao">Continuar olhando</a></div>`
       }
       ${
@@ -1078,6 +1109,7 @@ function paginaConfirmacao(main, id, numero) {
                       <div class="linha-total"><span>Total</span><strong>${formatarPreco(pedido.total + Number(f.valor))}</strong></div>`
                    : `<div class="linha-total"><span>Total das peças</span><strong>${formatarPreco(pedido.total)}</strong></div>`
                }
+               ${linhaPagamento}
              </div>`
           : ""
       }

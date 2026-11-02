@@ -1108,7 +1108,15 @@ function etiquetaHtml(p) {
     </div>`;
 }
 
+/** O site grava a forma de pagamento escolhida na primeira linha das observações. */
+function separarPagamento(texto) {
+  const t = String(texto || "").trim();
+  const m = t.match(/^Pagamento: ([^\n]+)\n?([\s\S]*)$/);
+  return m ? { pagamento: m[1].trim(), resto: m[2].trim() } : { pagamento: "", resto: t };
+}
+
 function pedidoHtml(p) {
+  const obs = separarPagamento(p.observacoes);
   const nomeLoja = estado.config?.nome || "loja";
   const msg = `Olá, ${p.nome.split(" ")[0]}! Aqui é da ${nomeLoja}, sobre o seu pedido nº ${p.numero}.`;
   const temFrete = p.frete_valor !== null && p.frete_valor !== undefined;
@@ -1140,7 +1148,8 @@ function pedidoHtml(p) {
                 ? `<p class="pedido-frete">Frete a combinar</p>`
                 : ""
           }
-          ${p.observacoes ? `<p style="color:var(--taupe)">“${escapar(p.observacoes)}”</p>` : ""}
+          ${obs.pagamento ? `<p>Pagamento: ${escapar(obs.pagamento)}</p>` : ""}
+          ${obs.resto ? `<p style="color:var(--taupe)">“${escapar(obs.resto)}”</p>` : ""}
         </div>
         <div class="pedido-itens">
           ${(p.pedido_itens || [])

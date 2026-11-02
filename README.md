@@ -67,10 +67,10 @@ Uma peça só pode ser publicada com título, preço e pelo menos uma foto; o ba
 ### Pedidos
 
 1. A cliente coloca as peças na sacola e clica em **Finalizar pedido**.
-2. Informa nome, WhatsApp e se quer envio ou retirada. No envio, o CEP preenche rua, bairro, cidade e UF; ela completa número, complemento e CPF (exigido na etiqueta).
+2. Informa nome, WhatsApp e se quer envio ou retirada. No envio, o CEP preenche rua, bairro, cidade e UF; ela completa número, complemento e CPF (exigido na etiqueta). Por fim, escolhe como vai pagar: PIX ou cartão de crédito.
 3. Com o Melhor Envio ligado, as opções de frete aparecem na hora, com transportadora, prazo e preço, e o total já inclui o frete escolhido. Sem ele (ou se a cotação falhar), o pedido segue com frete a combinar.
 4. Ao confirmar, as peças ficam **Reservadas** na hora (duas pessoas nunca compram a mesma peça) e o pedido aparece na aba **Pedidos**, com um aviso de novo pedido.
-5. A cliente é convidada a enviar o pedido pelo WhatsApp da loja, já com peças, frete, total e endereço escritos.
+5. A cliente é convidada a enviar o pedido pelo WhatsApp da loja, já com peças, frete, total, endereço e forma de pagamento escritos.
 
 Na aba **Pedidos**, o botão **WhatsApp** abre a conversa com a cliente. Ao mudar a situação, as peças acompanham:
 
@@ -78,7 +78,9 @@ Na aba **Pedidos**, o botão **WhatsApp** abre a conversa com a cliente. Ao muda
 - **Pago**, **Enviado**, **Concluído**: peças vendidas.
 - **Cancelado**: peças voltam a ficar disponíveis.
 
-O pagamento é combinado pelo WhatsApp. Pedidos com frete escolhido no site mostram o botão **Gerar etiqueta** (veja abaixo).
+**Pagamento (por enquanto, à parte):** a forma escolhida pela cliente aparece no pedido, mas o site ainda não cobra sozinho. Responda pelo WhatsApp com a chave PIX ou com um link para pagar com cartão (gerado no Mercado Pago, PagSeguro, InfinitePay ou na maquininha que você já usa). Quando o pagamento cair, mude o pedido para **Pago**. A cobrança automática no site (PIX e cartão) fica para a próxima etapa.
+
+Pedidos com frete escolhido no site mostram o botão **Gerar etiqueta** (veja abaixo).
 
 ### Frete e etiquetas (Melhor Envio)
 
@@ -108,7 +110,16 @@ O frete é calculado com o tamanho e o peso típicos de cada categoria (um vesti
 Há dois caminhos para trazer anúncios do Enjoei para a loja, sempre como rascunho para revisar antes de publicar:
 
 - **Por print (o dia a dia):** no app do Enjoei, tire um print de cada anúncio, com a foto e o preço aparecendo, e solte os prints em **Cadastro rápido**. Cada print vira um rascunho com a foto recortada e a descrição reescrita no tom da loja.
-- **Importação em lote:** a Edge Function `importar-pecas` cria rascunhos a partir dos dados e das fotos de vários anúncios de uma vez, copiando as fotos para a loja e evitando duplicar o mesmo anúncio (ela guarda o link de origem). É o caminho usado para a primeira carga das peças.
+- **Importação em lote:** a Edge Function `importar-pecas` cria rascunhos a partir dos dados e das fotos de vários anúncios de uma vez, copiando as fotos para a loja e evitando duplicar o mesmo anúncio (ela guarda o link de origem). Foi o caminho usado na primeira carga: as 39 peças da loja da Natasha no Enjoei, com as fotos dos anúncios e as descrições reescritas. Para repetir, é só pedir ao Claude para atualizar a partir da loja do Enjoei: ele lê os anúncios no Chrome e traz só os que ainda não estão aqui.
+
+#### Mantendo as duas lojas iguais
+
+Cada peça é única e pode estar à venda nos dois lugares, então o cuidado é não vender a mesma peça duas vezes:
+
+- **Vendeu no Enjoei:** no painel, mude a peça para **Vendida** (ou **Oculta**) no mesmo dia.
+- **Vendeu aqui na loja:** pause ou exclua o anúncio no Enjoei assim que o pedido chegar (a peça já fica **Reservada** aqui sozinha).
+- **Peça nova no Enjoei:** tire um print do anúncio e solte em **Cadastro rápido**, ou junte várias e peça uma nova importação em lote.
+- **Mudou o preço no Enjoei:** edite o preço da peça no painel. Lembre que o Enjoei mostra às vezes um preço promocional de primeira compra; o preço do anúncio é o outro.
 
 ### Loja
 
