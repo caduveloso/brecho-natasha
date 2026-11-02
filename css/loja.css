@@ -1013,6 +1013,155 @@ main {
   outline-offset: 2px;
 }
 
+.dupla-cep {
+  align-items: end;
+}
+
+.link-cep {
+  justify-self: start;
+  padding-bottom: 12px;
+  color: var(--taupe);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  transition: color var(--transicao);
+}
+
+.link-cep:hover {
+  color: var(--cafe);
+}
+
+.cidade-uf {
+  display: grid;
+  grid-template-columns: 1fr 92px;
+  gap: 14px;
+}
+
+.campo > span em {
+  margin-left: 6px;
+  font-style: normal;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  color: var(--pedra-escura);
+}
+
+.frete {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.frete:empty {
+  display: none;
+}
+
+.frete-aviso {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  padding: 14px 16px;
+  background: var(--linho-claro);
+  border: 1px dashed var(--pedra);
+  color: var(--taupe);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.frete-aviso .girando {
+  flex: none;
+}
+
+.frete-titulo {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--taupe);
+}
+
+.opcoes-frete {
+  display: grid;
+  gap: 8px;
+}
+
+.opcao-frete {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--pedra);
+  border-radius: var(--raio);
+  cursor: pointer;
+  transition: border-color var(--transicao), background var(--transicao);
+}
+
+.opcao-frete input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cafe);
+}
+
+.opcao-frete:has(input:checked) {
+  border-color: var(--cafe);
+  background: var(--linho-claro);
+}
+
+.opcao-frete:has(input:focus-visible) {
+  outline: 1px solid var(--argila);
+  outline-offset: 2px;
+}
+
+.frete-servico {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.frete-servico strong {
+  font-weight: 500;
+  font-size: 15px;
+}
+
+.frete-servico small {
+  color: var(--taupe);
+  font-size: 13px;
+}
+
+.frete-valor {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.linha-resumo {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 10px;
+  font-size: 15px;
+  color: var(--cafe-suave);
+}
+
+.item-sacola + .linha-resumo {
+  margin-top: 18px;
+}
+
+.linha-resumo span small {
+  display: block;
+  margin: 0;
+  color: var(--taupe);
+  font-size: 12px;
+}
+
+.resumo .linha-resumo + .linha-total,
+.pedido-resumo .linha-resumo + .linha-total {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--pedra);
+}
+
 .resumo {
   align-self: start;
   position: sticky;

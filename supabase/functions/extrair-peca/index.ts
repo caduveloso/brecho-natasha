@@ -88,7 +88,14 @@ Regras:
 - Não invente marca, tamanho, medidas nem preço: use só o que está escrito ou visível. Cor e categoria podem ser deduzidas da foto.
 - trecho_texto: o trecho do texto original (do print ou do texto colado) que se refere a esta peça, transcrito literalmente. Vazio se não houver.
 - observacao: se algo estiver ambíguo (preço ilegível, dúvida se duas fotos são da mesma peça), explique em poucas palavras. Caso contrário, deixe vazio.
-- Ignore mensagens que não sejam de venda (cumprimentos, perguntas, conversas).`;
+- Ignore mensagens que não sejam de venda (cumprimentos, perguntas, conversas).
+
+Prints de anúncios do Enjoei (ou de outros sites e apps de venda, como OLX, Repassa e Instagram):
+- Cada anúncio é uma peça. Use o que a vendedora escreveu: título, preço, tamanho, marca, estado de conservação, medidas e descrição.
+- Ignore tudo o que é do aplicativo: botões ("eu quero", "fazer oferta", "comprar", "adicionar à sacolinha"), parcelamento ("em até 3x sem juros"), frete ("frete grátis", "calcular frete"), avaliações, nome e foto da vendedora, curtidas, comentários, contadores, selos e cupons do aplicativo.
+- Se houver preço riscado e preço atual, o atual é preco e o riscado é preco_original. Não use valores de parcela, de frete ou de cupom como preço.
+- O recorte deve pegar só a foto do produto, sem barras, botões, ícones ou textos sobrepostos.
+- Reescreva a descrição no tom da loja: sóbria, sem gírias, exageros ou emojis do anúncio, mantendo as informações úteis (tecido, caimento, detalhes). Se o anúncio citar defeitos ou sinais de uso, mantenha essa informação de forma clara e gentil.`;
 
 const MODOS: Record<string, string> = {
   auto: "Decida você como agrupar as imagens em peças.",

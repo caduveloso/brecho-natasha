@@ -9,6 +9,8 @@ import {
   logotipoHtml,
   mensagemDeErro,
   linkWhatsapp,
+  soDigitos,
+  chamarFuncao,
   BUCKET_FOTOS,
   BUCKET_ORIGINAIS,
 } from "./comum.js";
@@ -45,6 +47,8 @@ const estado = {
   processando: false,
   pecasCarregadas: 0,
   pecasTotal: 0,
+  envio: null, // dados de envio (remetente, transportadoras)
+  statusEnvio: null, // situação da conta no Melhor Envio
 };
 
 function uuid() {
@@ -576,7 +580,8 @@ function editorHtml(p, contexto) {
         <label class="campo c2"><span>Cor</span><input data-campo="cor" value="${v("cor")}"></label>
         <label class="campo c2"><span>Estado</span><input data-campo="estado" value="${v("estado")}" list="lista-estados"></label>
         <label class="campo c2"><span>Preço original (riscado)</span><input data-campo="preco_original" inputmode="decimal" value="${precoParaCampo(p.preco_original)}" placeholder="Opcional"></label>
-        <label class="campo c6"><span>Medidas</span><input data-campo="medidas" value="${v("medidas")}" placeholder="Ex.: Busto 90 cm, comprimento 110 cm"></label>
+        <label class="campo c4"><span>Medidas</span><input data-campo="medidas" value="${v("medidas")}" placeholder="Ex.: Busto 90 cm, comprimento 110 cm"></label>
+        <label class="campo c2"><span>Peso (g)</span><input data-campo="peso_g" inputmode="numeric" value="${p.peso_g ?? ""}" placeholder="Padrão da categoria" title="Usado no cálculo do frete. Sem peso, vale o padrão da categoria."></label>
         <label class="campo c6"><span>Descrição</span><textarea data-campo="descricao" rows="3" placeholder="Tecido, caimento, detalhes…">${v("descricao")}</textarea></label>
         ${obs ? `<div class="editor-observacao">${escapar(obs)}</div>` : ""}
         ${p.origem_texto ? `<details class="editor-original"><summary>Texto original</summary><pre>${escapar(p.origem_texto)}</pre></details>` : ""}
@@ -658,7 +663,10 @@ function ligarEditor(el, peca, contexto, aoTerminar = () => {}) {
     let valor = input.value;
     if (campo === "preco" || campo === "preco_original") valor = lerPreco(valor);
     else if (campo === "categoria_id") valor = valor ? Number(valor) : null;
-    else valor = valor.trim();
+    else if (campo === "peso_g") {
+      const gramas = parseInt(soDigitos(valor), 10);
+      valor = gramas >= 10 ? Math.min(gramas, 30000) : null;
+    } else valor = valor.trim();
     return [campo, valor];
   };
 
@@ -1047,9 +1055,64 @@ async function contarPedidosNovos() {
   el.classList.toggle("oculto", !count);
 }
 
+function formatarCpf(valor) {
+  const d = soDigitos(valor);
+  return d.length === 11 ? `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}` : d;
+}
+
+function nomeDoFrete(p) {
+  const empresa = (p.frete_empresa || "").trim();
+  const nome = (p.frete_nome || "").trim();
+  return nome.toLowerCase().startsWith(empresa.toLowerCase()) ? nome : `${empresa} ${nome}`.trim();
+}
+
+function etiquetaHtml(p) {
+  if (p.entrega !== "envio") return "";
+  const st = p.etiqueta_status || "";
+  if (!p.frete_servico) {
+    return p.status === "cancelado"
+      ? ""
+      : `<div class="pedido-etiqueta"><small>Frete a combinar: se precisar de etiqueta, faça direto no Melhor Envio.</small></div>`;
+  }
+  const cancelar = ["carrinho", "paga", "gerada"].includes(st)
+    ? `<button type="button" class="botao-texto" data-etiqueta="cancelar">${st === "carrinho" ? "Tirar do carrinho" : "Cancelar etiqueta"}</button>`
+    : "";
+  if (st === "gerada") {
+    return `
+      <div class="pedido-etiqueta">
+        ${
+          p.etiqueta_url
+            ? `<a class="botao pequeno" href="${escapar(p.etiqueta_url)}" target="_blank" rel="noopener">Imprimir etiqueta</a>`
+            : `<button type="button" class="botao pequeno" data-etiqueta="imprimir">Buscar etiqueta</button>`
+        }
+        ${
+          p.etiqueta_rastreio
+            ? `<span>Rastreio: <span class="rastreio">${escapar(p.etiqueta_rastreio)}</span></span>`
+            : `<button type="button" class="botao-texto" data-etiqueta="imprimir">Atualizar rastreio</button>`
+        }
+        ${cancelar}
+      </div>`;
+  }
+  if (p.status === "cancelado") return cancelar ? `<div class="pedido-etiqueta">${cancelar}</div>` : "";
+  const nota =
+    st === "carrinho"
+      ? "Está no carrinho do Melhor Envio. Falta pagar com o saldo."
+      : st === "paga"
+        ? "Já está paga. Falta gerar."
+        : `Usa o saldo da conta no Melhor Envio (cerca de ${formatarPreco(p.frete_valor)}).`;
+  return `
+    <div class="pedido-etiqueta">
+      <button type="button" class="botao pequeno contorno" data-etiqueta="etiqueta">${st === "carrinho" || st === "paga" ? "Continuar etiqueta" : "Gerar etiqueta"}</button>
+      <small>${nota}</small>
+      ${cancelar}
+    </div>`;
+}
+
 function pedidoHtml(p) {
   const nomeLoja = estado.config?.nome || "loja";
   const msg = `Olá, ${p.nome.split(" ")[0]}! Aqui é da ${nomeLoja}, sobre o seu pedido nº ${p.numero}.`;
+  const temFrete = p.frete_valor !== null && p.frete_valor !== undefined;
+  const total = Number(p.total) + (temFrete ? Number(p.frete_valor) : 0);
   return `
     <article class="pedido ${p.status === "novo" ? "novo" : ""}" data-id="${p.id}">
       <div class="pedido-topo">
@@ -1068,7 +1131,15 @@ function pedidoHtml(p) {
         <div>
           <p><strong>${escapar(p.nome)}</strong></p>
           <p>${escapar(p.telefone)}${p.email ? ` · ${escapar(p.email)}` : ""}</p>
+          ${p.cpf ? `<p>CPF ${escapar(formatarCpf(p.cpf))}</p>` : ""}
           <p>${p.entrega === "envio" ? `Envio: ${escapar(p.endereco)}${p.cep ? ` · CEP ${escapar(p.cep)}` : ""}` : "Retirada"}</p>
+          ${
+            p.frete_servico
+              ? `<p class="pedido-frete">Frete: ${escapar(nomeDoFrete(p))} · ${formatarPreco(p.frete_valor)}${p.frete_prazo ? ` · até ${p.frete_prazo} dias úteis` : ""}</p>`
+              : p.entrega === "envio"
+                ? `<p class="pedido-frete">Frete a combinar</p>`
+                : ""
+          }
           ${p.observacoes ? `<p style="color:var(--taupe)">“${escapar(p.observacoes)}”</p>` : ""}
         </div>
         <div class="pedido-itens">
@@ -1082,9 +1153,16 @@ function pedidoHtml(p) {
             </div>`,
             )
             .join("")}
-          <div class="pedido-total"><span>Total</span><span>${formatarPreco(p.total)}</span></div>
+          ${
+            temFrete
+              ? `<div class="pedido-subtotal"><span>Peças</span><span>${formatarPreco(p.total)}</span></div>
+                 <div class="pedido-subtotal"><span>Frete</span><span>${formatarPreco(p.frete_valor)}</span></div>`
+              : ""
+          }
+          <div class="pedido-total"><span>Total</span><span>${formatarPreco(total)}</span></div>
         </div>
       </div>
+      ${etiquetaHtml(p)}
     </article>`;
 }
 
@@ -1121,6 +1199,7 @@ function mostrarLoja() {
     if (form[k]) form[k].value = c[k] ?? "";
   });
   desenharCategorias();
+  carregarEnvio();
 }
 
 function desenharCategorias() {
@@ -1158,7 +1237,7 @@ async function verificarIa() {
   const painelSegredos = "https://supabase.com/dashboard/project/vmhbvlyxpxzqclghxvtj/functions/secrets";
   if (estado.iaDisponivel === true) {
     el.innerHTML = "Ativa. Fotos, prints e textos são lidos pelo Claude, que preenche os campos e recorta as fotos.";
-    dica.textContent = "Dica: dá para enviar vários prints de uma vez. Cada peça vira um rascunho.";
+    dica.textContent = "Dica: dá para enviar vários prints de uma vez, inclusive de anúncios do Enjoei. Cada peça vira um rascunho com a foto recortada e uma descrição no tom da loja.";
   } else if (estado.iaDisponivel === false) {
     el.innerHTML = `Desligada. O painel usa a leitura simples, que entende textos e lê prints, mas acerta menos e não recorta as fotos sozinha. Para ligar, cadastre o segredo <code>ANTHROPIC_API_KEY</code> em <a class="link" href="${painelSegredos}" target="_blank" rel="noopener">Edge Functions › Secrets</a> no Supabase.`;
     dica.textContent = "Leitura simples ativa: textos são entendidos na hora; prints passam por leitura de texto (OCR), o que leva alguns segundos.";
@@ -1166,6 +1245,129 @@ async function verificarIa() {
     el.textContent = "Não consegui verificar agora. O cadastro funciona mesmo assim.";
     dica.textContent = "";
   }
+}
+
+/* ------------------------------------------------------------------ */
+/* Envio e etiquetas (Melhor Envio)                                    */
+/* ------------------------------------------------------------------ */
+
+const CAMPOS_ENVIO = ["nome", "documento", "telefone", "email", "cep", "rua", "numero", "complemento", "bairro", "cidade", "uf", "dias_postagem"];
+const TRANSPORTADORAS_BASE = ["Correios", "Jadlog", "Loggi"];
+const PAINEL_SEGREDOS = "https://supabase.com/dashboard/project/vmhbvlyxpxzqclghxvtj/functions/secrets";
+
+async function carregarEnvio() {
+  const form = $("#form-envio");
+  const { data, error } = await sb.from("envio_config").select("*").eq("id", 1).maybeSingle();
+  if (error) {
+    $("#status-envio").innerHTML = `<p class="alerta">${escapar(mensagemDeErro(error))}</p>`;
+    return;
+  }
+  estado.envio = data || {};
+  CAMPOS_ENVIO.forEach((k) => {
+    if (form[k]) form[k].value = estado.envio[k] ?? "";
+  });
+  form.declarar_valor.checked = estado.envio.declarar_valor !== false;
+  desenharTransportadoras([]);
+  atualizarStatusEnvio();
+  chamarFuncao("frete", { acao: "transportadoras" })
+    .then((r) => {
+      if (r?.ok && Array.isArray(r.transportadoras)) desenharTransportadoras(r.transportadoras);
+    })
+    .catch(() => {});
+}
+
+function desenharTransportadoras(lista) {
+  const marcadas = new Set((estado.envio?.transportadoras || []).map((n) => n.toLowerCase()));
+  const porNome = new Map();
+  const incluir = (nome, id = null) => {
+    const chave = nome.toLowerCase();
+    const atual = porNome.get(chave);
+    if (!atual) porNome.set(chave, { nome, id });
+    else if (id && !atual.id) atual.id = id;
+  };
+  (lista || []).forEach((t) => t?.nome && incluir(t.nome, t.id));
+  TRANSPORTADORAS_BASE.forEach((n) => incluir(n));
+  (estado.envio?.transportadoras || []).forEach((n) => incluir(n));
+  $("#lista-transportadoras").innerHTML = [...porNome.values()]
+    .map(
+      (t) => `<label class="marcar"><input type="checkbox" name="transportadora" value="${escapar(t.nome)}" data-empresa="${t.id ?? ""}" ${
+        marcadas.has(t.nome.toLowerCase()) ? "checked" : ""
+      }> ${escapar(t.nome)}</label>`,
+    )
+    .join("");
+  carregarAgencias();
+}
+
+async function carregarAgencias() {
+  const caixa = $("#agencias-envio");
+  const empresas = $$("#lista-transportadoras input:checked")
+    .map((i) => ({ nome: i.value, id: Number(i.dataset.empresa) || null }))
+    .filter((t) => t.id && t.nome.toLowerCase() !== "correios");
+  if (!empresas.length || !estado.statusEnvio?.valido || !estado.envio?.cidade) {
+    caixa.classList.add("oculto");
+    caixa.innerHTML = "";
+    return;
+  }
+  const blocos = await Promise.all(
+    empresas.map(async (t) => {
+      const r = await chamarFuncao("frete", { acao: "agencias", empresa: t.id }).catch(() => null);
+      const lista = r?.ok ? r.agencias || [] : [];
+      if (!lista.length) return "";
+      const atual = String(estado.envio?.agencias?.[t.id] ?? "");
+      return `<label class="campo"><span>Agência ${escapar(t.nome)} onde você posta</span>
+        <select data-agencia="${t.id}"><option value="">Escolha a agência…</option>${lista
+          .map((a) => `<option value="${a.id}" ${String(a.id) === atual ? "selected" : ""}>${escapar(a.nome)}${a.endereco ? ` · ${escapar(a.endereco)}` : ""}</option>`)
+          .join("")}</select></label>`;
+    }),
+  );
+  const html = blocos.filter(Boolean).join("");
+  caixa.innerHTML = html ? `${html}<p class="dica">Algumas transportadoras pedem a agência onde o pacote vai ser deixado.</p>` : "";
+  caixa.classList.toggle("oculto", !html);
+}
+
+async function atualizarStatusEnvio() {
+  const el = $("#status-envio");
+  el.textContent = "Verificando o Melhor Envio…";
+  let s = null;
+  try {
+    s = await chamarFuncao("frete", { acao: "status" });
+  } catch {
+    s = null;
+  }
+  estado.statusEnvio = s;
+  if (!s?.ok) {
+    el.innerHTML = `<p>Não consegui verificar o Melhor Envio agora. O site continua aceitando pedidos com frete a combinar.</p>`;
+    return;
+  }
+  const faltas = s.faltas || [];
+  const partes = [];
+  if (!s.token) {
+    partes.push(`
+      <p><strong>Frete automático desligado.</strong> Enquanto isso, os pedidos com envio ficam com o frete a combinar pelo WhatsApp.</p>
+      <p>Para ligar o frete no site e as etiquetas:</p>
+      <ol>
+        <li>Crie uma conta grátis no <a class="link" href="https://melhorenvio.com.br" target="_blank" rel="noopener">Melhor Envio</a>.</li>
+        <li>Lá, em <a class="link" href="https://melhorenvio.com.br/painel/gerenciar/tokens" target="_blank" rel="noopener">Gerenciar › Tokens</a>, clique em <strong>Novo token</strong>, marque <strong>Selecionar todos</strong> e salve.</li>
+        <li>Copie o token e cadastre no Supabase, em <a class="link" href="${PAINEL_SEGREDOS}" target="_blank" rel="noopener">Edge Functions › Secrets</a>, com o nome <code>MELHOR_ENVIO_TOKEN</code>.</li>
+      </ol>`);
+  } else if (s.valido === false) {
+    partes.push(`<p class="alerta"><strong>O Melhor Envio recusou o token.</strong> ${escapar(s.erro || "")} Gere um novo em Gerenciar › Tokens e troque o segredo <code>MELHOR_ENVIO_TOKEN</code> no <a class="link" href="${PAINEL_SEGREDOS}" target="_blank" rel="noopener">Supabase</a>.</p>`);
+  } else {
+    partes.push(`<p class="ok"><strong>Conectado ao Melhor Envio</strong>${s.conta?.nome ? ` (${escapar(s.conta.nome)})` : ""}${s.sandbox ? ", no ambiente de testes" : ""}.</p>`);
+    if (s.saldo !== null && s.saldo !== undefined) {
+      partes.push(`<p>Saldo para etiquetas: <strong>${formatarPreco(s.saldo)}</strong>. Para pôr mais, use a carteira da sua conta no <a class="link" href="https://melhorenvio.com.br/painel" target="_blank" rel="noopener">Melhor Envio</a>.</p>`);
+    }
+  }
+  if (s.token && s.valido !== false) {
+    if (faltas.includes("CEP")) partes.push(`<p class="alerta">Preencha o CEP de onde as peças saem para o frete aparecer no site.</p>`);
+    else partes.push(`<p>O frete já aparece na finalização do pedido, com as transportadoras marcadas abaixo.</p>`);
+    if (/combinad/i.test(estado.config?.envio_info || "")) {
+      partes.push(`<p>Dica: o <strong>Texto sobre envio</strong>, em Dados da loja, ainda diz que o frete é combinado pelo WhatsApp. Vale trocar por algo como “Enviamos para todo o Brasil. O frete é calculado pelo CEP ao finalizar o pedido.”</p>`);
+    }
+    if (faltas.length) partes.push(`<p>Para gerar etiquetas, falta preencher: ${escapar(faltas.join(", "))}.</p>`);
+  }
+  el.innerHTML = partes.join("");
+  carregarAgencias();
 }
 
 /* ------------------------------------------------------------------ */
@@ -1327,6 +1529,81 @@ function ligarEventos() {
     if (error) return avisar(mensagemDeErro(error), "erro");
     avisar(`Pedido marcado como “${STATUS_PEDIDO[novo]}”.`);
     carregarPedidos();
+  });
+
+  $("#lista-pedidos").addEventListener("click", async (e) => {
+    const botao = e.target.closest("[data-etiqueta]");
+    if (!botao) return;
+    const acao = botao.dataset.etiqueta;
+    if (acao === "etiqueta" && !confirm("Gerar a etiqueta agora? O valor sai do saldo da sua conta no Melhor Envio.")) return;
+    if (acao === "cancelar" && !confirm("Cancelar a etiqueta? Se já foi paga, o valor volta para o saldo do Melhor Envio.")) return;
+    const id = botao.closest(".pedido").dataset.id;
+    botao.disabled = true;
+    botao.innerHTML = `<span class="girando"></span>`;
+    try {
+      const r = await chamarFuncao("frete", { acao, pedido_id: id });
+      if (!r?.ok) avisar(r?.erro || "Não foi possível concluir. Tente de novo.", "erro");
+      else if (acao === "cancelar") avisar("Etiqueta cancelada.");
+      else avisar(r.url ? "Etiqueta pronta. Clique em Imprimir etiqueta." : r.aviso || "Etiqueta gerada.");
+    } catch (erro) {
+      avisar(mensagemDeErro(erro), "erro");
+    }
+    carregarPedidos();
+  });
+
+  // Envio e etiquetas
+  const formEnvio = $("#form-envio");
+  formEnvio.cep.addEventListener("input", async () => {
+    const cep = soDigitos(formEnvio.cep.value).slice(0, 8);
+    formEnvio.cep.value = cep.length > 5 ? `${cep.slice(0, 5)}-${cep.slice(5)}` : cep;
+    if (cep.length !== 8) return;
+    try {
+      const d = await (await fetch(`https://viacep.com.br/ws/${cep}/json/`)).json();
+      if (!d || d.erro) return;
+      const preencher = (campo, valor) => {
+        if (valor && !formEnvio[campo].value.trim()) formEnvio[campo].value = valor;
+      };
+      preencher("rua", d.logradouro);
+      preencher("bairro", d.bairro);
+      preencher("cidade", d.localidade);
+      preencher("uf", d.uf);
+    } catch {
+      /* digita à mão */
+    }
+  });
+  $("#lista-transportadoras").addEventListener("change", carregarAgencias);
+  formEnvio.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = e.currentTarget;
+    const dados = {};
+    ["nome", "telefone", "email", "rua", "numero", "complemento", "bairro", "cidade"].forEach((k) => (dados[k] = f[k].value.trim()));
+    dados.documento = soDigitos(f.documento.value);
+    const cep = soDigitos(f.cep.value);
+    dados.cep = cep.length === 8 ? `${cep.slice(0, 5)}-${cep.slice(5)}` : cep;
+    dados.uf = f.uf.value.trim().toUpperCase();
+    dados.dias_postagem = Math.min(15, Math.max(0, parseInt(f.dias_postagem.value, 10) || 0));
+    dados.declarar_valor = f.declarar_valor.checked;
+    dados.transportadoras = $$("#lista-transportadoras input:checked").map((i) => i.value);
+    const agencias = { ...(estado.envio?.agencias || {}) };
+    $$("#agencias-envio [data-agencia]").forEach((s) => {
+      if (s.value) agencias[s.dataset.agencia] = Number(s.value);
+      else delete agencias[s.dataset.agencia];
+    });
+    dados.agencias = agencias;
+    if (cep && cep.length !== 8) return avisar("O CEP tem 8 números.", "erro");
+    if (dados.uf && !/^[A-Z]{2}$/.test(dados.uf)) return avisar("A UF tem duas letras, como RJ.", "erro");
+    if (dados.documento && ![11, 14].includes(dados.documento.length)) return avisar("Confira o CPF ou CNPJ.", "erro");
+    if (!dados.transportadoras.length) return avisar("Escolha pelo menos uma transportadora.", "erro");
+    dados.atualizado_em = new Date().toISOString();
+    const botao = f.querySelector('button[type="submit"]');
+    botao.disabled = true;
+    const { error } = await sb.from("envio_config").update(dados).eq("id", 1);
+    botao.disabled = false;
+    if (error) return avisar(mensagemDeErro(error), "erro");
+    estado.envio = { ...estado.envio, ...dados };
+    f.cep.value = dados.cep;
+    avisar("Dados de envio salvos.");
+    atualizarStatusEnvio();
   });
 
   // Loja

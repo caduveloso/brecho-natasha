@@ -112,6 +112,25 @@ export function logotipoHtml(nome) {
   return `${menor ? `<span class="logo-menor">${escapar(menor)}</span>` : ""}<span class="logo-maior">${escapar(maior)}</span>`;
 }
 
+/**
+ * Chama uma Edge Function e devolve o JSON da resposta, inclusive quando ela
+ * responde com erro (400, 403...), para mostrar a mensagem que a função mandou.
+ */
+export async function chamarFuncao(nome, corpo) {
+  const { data, error } = await sb.functions.invoke(nome, { body: corpo });
+  if (!error) return data;
+  const resposta = error.context;
+  if (resposta && typeof resposta.json === "function") {
+    try {
+      const dados = await resposta.json();
+      if (dados && typeof dados === "object") return dados;
+    } catch {
+      /* resposta sem JSON: cai no erro original */
+    }
+  }
+  throw error;
+}
+
 export function mensagemDeErro(erro) {
   const msg = erro?.message || String(erro || "");
   if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return "Sem conexão. Verifique a internet e tente de novo.";

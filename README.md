@@ -1,6 +1,6 @@
 # Brechó da Natasha
 
-Loja online de peças únicas, com vitrine elegante, sacola, pedido com reserva automática da peça e conversa final pelo WhatsApp. Por trás, um painel de **cadastro rápido** que lê fotos, prints de conversa e textos colados e transforma cada peça em um rascunho pronto para revisar e publicar.
+Loja online de peças únicas, com vitrine elegante, sacola, frete calculado pelo CEP (Correios, Jadlog, Loggi), pedido com reserva automática da peça e conversa final pelo WhatsApp. Por trás, um painel de **cadastro rápido** que lê fotos, prints de conversa, prints de anúncios do Enjoei e textos colados e transforma cada peça em um rascunho pronto para revisar e publicar, e que gera a **etiqueta de envio** de cada pedido.
 
 - **Loja:** `index.html` (no ar em `https://caduveloso.github.io/brecho-natasha/`)
 - **Painel:** `admin.html` (no ar em `https://caduveloso.github.io/brecho-natasha/admin.html`)
@@ -17,7 +17,7 @@ Abra o painel e entre com o e-mail e a senha da administração. Troque a senha 
 
 ### Cadastro rápido
 
-1. Em **Cadastro rápido**, envie as imagens das peças: arraste para a área tracejada, cole um print com Ctrl+V ou toque em **Escolher da galeria** no celular.
+1. Em **Cadastro rápido**, envie as imagens das peças: arraste para a área tracejada, cole um print com Ctrl+V ou toque em **Escolher da galeria** no celular. Prints de anúncios do Enjoei funcionam do mesmo jeito: a leitura ignora botões, parcelas e frete do aplicativo e reescreve a descrição no tom da loja.
 2. Se tiver texto (a mensagem com descrição e preço), cole no campo **Texto colado**. Dá para colar várias peças de uma vez, uma por linha ou separadas por uma linha em branco.
 3. Diga como as imagens se agrupam:
    - **Detectar automaticamente**: o sistema decide.
@@ -67,9 +67,10 @@ Uma peça só pode ser publicada com título, preço e pelo menos uma foto; o ba
 ### Pedidos
 
 1. A cliente coloca as peças na sacola e clica em **Finalizar pedido**.
-2. Informa nome, WhatsApp e se quer envio (com CEP e endereço, preenchido pelo CEP) ou retirada.
-3. Ao confirmar, as peças ficam **Reservadas** na hora (duas pessoas nunca compram a mesma peça) e o pedido aparece na aba **Pedidos**, com um aviso de novo pedido.
-4. A cliente é convidada a enviar o pedido pelo WhatsApp da loja, já com peças, total e endereço escritos.
+2. Informa nome, WhatsApp e se quer envio ou retirada. No envio, o CEP preenche rua, bairro, cidade e UF; ela completa número, complemento e CPF (exigido na etiqueta).
+3. Com o Melhor Envio ligado, as opções de frete aparecem na hora, com transportadora, prazo e preço, e o total já inclui o frete escolhido. Sem ele (ou se a cotação falhar), o pedido segue com frete a combinar.
+4. Ao confirmar, as peças ficam **Reservadas** na hora (duas pessoas nunca compram a mesma peça) e o pedido aparece na aba **Pedidos**, com um aviso de novo pedido.
+5. A cliente é convidada a enviar o pedido pelo WhatsApp da loja, já com peças, frete, total e endereço escritos.
 
 Na aba **Pedidos**, o botão **WhatsApp** abre a conversa com a cliente. Ao mudar a situação, as peças acompanham:
 
@@ -77,7 +78,37 @@ Na aba **Pedidos**, o botão **WhatsApp** abre a conversa com a cliente. Ao muda
 - **Pago**, **Enviado**, **Concluído**: peças vendidas.
 - **Cancelado**: peças voltam a ficar disponíveis.
 
-Pagamento e frete são combinados pelo WhatsApp.
+O pagamento é combinado pelo WhatsApp. Pedidos com frete escolhido no site mostram o botão **Gerar etiqueta** (veja abaixo).
+
+### Frete e etiquetas (Melhor Envio)
+
+O frete do site e as etiquetas usam o [Melhor Envio](https://melhorenvio.com.br), que reúne Correios, Jadlog, Loggi e outras transportadoras. A conta é grátis; as etiquetas são pagas com o saldo da conta (você põe saldo por Pix ou cartão no próprio Melhor Envio).
+
+Para ligar:
+
+1. Crie a conta no Melhor Envio.
+2. Em **Gerenciar › Tokens** (`melhorenvio.com.br/painel/gerenciar/tokens`), clique em **Novo token**, marque **Selecionar todos** e salve. Copie o token.
+3. No Supabase, em [Edge Functions › Secrets](https://supabase.com/dashboard/project/vmhbvlyxpxzqclghxvtj/functions/secrets), crie o segredo `MELHOR_ENVIO_TOKEN` com o token.
+4. No painel, em **Loja › Envio e etiquetas**, preencha os dados de quem envia (nome, CPF ou CNPJ, telefone, e-mail e endereço com CEP) e escolha as transportadoras oferecidas no site. Se a Jadlog estiver marcada, escolha também a agência onde você vai deixar os pacotes.
+
+O quadro no topo do cartão mostra se a conta está conectada e o saldo disponível. Opcional: o segredo `MELHOR_ENVIO_SANDBOX` com o valor `true` usa o ambiente de testes do Melhor Envio (o token, nesse caso, é o da conta de testes).
+
+Para enviar um pedido:
+
+1. Em **Pedidos**, clique em **Gerar etiqueta**. O sistema compra a etiqueta com o saldo do Melhor Envio (o valor é o mesmo frete que a cliente pagou) e gera o documento.
+2. Clique em **Imprimir etiqueta**, imprima e cole no pacote. O código de barras já vai nela.
+3. Leve o pacote à agência da transportadora escolhida pela cliente. Depois da postagem, **Atualizar rastreio** traz o código de rastreio para mandar à cliente.
+
+Sem saldo, o painel avisa e a etiqueta fica no carrinho do Melhor Envio; é só pôr saldo e clicar em **Continuar etiqueta**. **Cancelar etiqueta** devolve o valor ao saldo quando a etiqueta ainda não foi usada.
+
+O frete é calculado com o tamanho e o peso típicos de cada categoria (um vestido, por exemplo, vai como pacote de 30 × 25 × 5 cm com 400 g). Para peças pesadas ou volumosas, preencha o **Peso (g)** na edição da peça.
+
+### Peças que já estão no Enjoei
+
+Há dois caminhos para trazer anúncios do Enjoei para a loja, sempre como rascunho para revisar antes de publicar:
+
+- **Por print (o dia a dia):** no app do Enjoei, tire um print de cada anúncio, com a foto e o preço aparecendo, e solte os prints em **Cadastro rápido**. Cada print vira um rascunho com a foto recortada e a descrição reescrita no tom da loja.
+- **Importação em lote:** a Edge Function `importar-pecas` cria rascunhos a partir dos dados e das fotos de vários anúncios de uma vez, copiando as fotos para a loja e evitando duplicar o mesmo anúncio (ela guarda o link de origem). É o caminho usado para a primeira carga das peças.
 
 ### Loja
 
@@ -93,29 +124,34 @@ css/                     base.css (cores, letras, botões), loja.css, admin.css
 js/config.js             endereço do Supabase e chave pública
 js/comum.js              cliente Supabase, preços, WhatsApp, avisos
 js/loja.js               vitrine, coleção, peça, sacola, checkout
-js/admin.js              painel (cadastro rápido, peças, pedidos, loja)
+js/admin.js              painel (cadastro rápido, peças, pedidos, loja, envio)
 js/extrator.js           leitura simples de textos e prints (regras + OCR)
 js/imagem.js             redução, recorte e conversão das fotos para WebP
 vendor/                  supabase-js 2.118.0
 supabase/migrations/     banco de dados (tabelas, regras de acesso, funções)
-supabase/functions/      extrair-peca (leitura automática com o Claude)
+supabase/functions/      extrair-peca (leitura com o Claude), frete (cotação, pedido
+                         com frete e etiquetas), importar-pecas (carga de anúncios)
 ```
 
 **Supabase** (projeto `brecho-natasha`, região São Paulo):
 
 - Tabelas `pecas`, `categorias`, `pedidos`, `pedido_itens`, `loja_config` e `admins`, todas com Row Level Security. O público só lê peças publicadas, categorias e os dados da loja; não lê pedidos nem campos internos.
-- Pedidos entram só pela função `criar_pedido`, que trava as peças, confere se ainda estão disponíveis e reserva tudo de uma vez.
+- Pedidos entram só por funções do banco que travam as peças, conferem se ainda estão disponíveis e reservam tudo de uma vez: `fazer_pedido` (retirada ou frete a combinar) e `fazer_pedido_com_frete`, que só a Edge Function `frete` pode chamar, depois de recalcular o frete no Melhor Envio (assim ninguém altera o valor do frete pelo navegador).
+- `envio_config` guarda os dados de quem envia e só é lida pelo painel. Os pedidos guardam CPF, endereço em partes, frete escolhido e a situação da etiqueta.
 - Um gatilho acerta a situação das peças quando o pedido muda de situação, e outro impede publicar peça sem título, preço ou foto.
 - Fotos no Storage: `pecas` (público, WebP em 1600 px e miniatura de 640 px) e `originais` (privado, a imagem original de cada cadastro, usada para recortar de novo).
 - Edge Function `extrair-peca`: só atende administradoras logadas e usa o segredo `ANTHROPIC_API_KEY`.
+- Edge Function `frete`: cotação e pedido são públicos (o site usa); status, transportadoras, agências e etiquetas só atendem administradoras. Usa o segredo `MELHOR_ENVIO_TOKEN`.
+- Edge Function `importar-pecas`: só atende administradoras logadas ou quem tiver uma chave temporária de importação; baixa fotos apenas de endereços do Enjoei.
 
 A chave em `js/config.js` é a chave **pública** do Supabase, feita para ficar no navegador; a segurança vem das regras de acesso do banco. Nenhum segredo fica no código.
 
 ### Publicar mudanças
 
 - **Site:** qualquer commit na branch `main` é publicado pelo GitHub Pages em cerca de um minuto (Settings › Pages, origem "Deploy from a branch", `main`, pasta raiz).
-- **Banco:** as migrações em `supabase/migrations` já foram aplicadas. Mudanças novas entram como novos arquivos nessa pasta.
-- **Função:** `supabase functions deploy extrair-peca --no-verify-jwt` (a função faz a própria checagem de login).
+- **Banco:** as migrações ficam em `supabase/migrations`, em ordem de data. Mudanças novas entram como novos arquivos nessa pasta.
+- **Funções:** `supabase functions deploy extrair-peca --no-verify-jwt` (e o mesmo para `frete` e `importar-pecas`). Todas fazem a própria checagem de acesso.
+- **Testes das regras de frete:** `deno test supabase/functions/frete/`.
 
 ### Cuidados
 
