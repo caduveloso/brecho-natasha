@@ -786,10 +786,122 @@
   align-items: start;
 }
 
-.coluna-direita {
+.coluna-direita,
+.coluna-esquerda {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+/* Envio e etiquetas */
+.status-envio {
+  padding: 14px 16px;
+  background: var(--areia);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.status-envio p {
+  margin: 0 0 6px;
+}
+
+.status-envio p:last-child {
+  margin-bottom: 0;
+}
+
+.status-envio ol {
+  margin: 6px 0 8px;
+  padding-left: 20px;
+}
+
+.status-envio .ok {
+  color: var(--ok);
+}
+
+.status-envio .alerta {
+  color: var(--erro);
+}
+
+.grupo-marcar {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.grupo-marcar legend {
+  margin-bottom: 8px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--taupe);
+}
+
+.lista-marcar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.marcar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.lista-marcar .marcar {
+  padding: 8px 12px;
+  border: 1px solid var(--pedra);
+  background: var(--linho);
+}
+
+.lista-marcar .marcar:has(input:checked) {
+  border-color: var(--cafe);
+  background: #fff;
+}
+
+.marcar input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--cafe);
+}
+
+.dupla-painel > .marcar {
+  align-self: end;
+  min-height: 46px;
+}
+
+.pedido-frete {
+  color: var(--cafe-suave);
+}
+
+.pedido-subtotal {
+  display: flex;
+  justify-content: space-between;
+  color: var(--cafe-suave);
+}
+
+.pedido-etiqueta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--pedra);
+  font-size: 13px;
+}
+
+.pedido-etiqueta .rastreio {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+
+.pedido-etiqueta small {
+  color: var(--taupe);
 }
 
 .lista-categorias {

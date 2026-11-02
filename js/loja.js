@@ -10,6 +10,7 @@ import {
   mensagemDeErro,
   numeroWhatsapp,
   soDigitos,
+  chamarFuncao,
 } from "./comum.js";
 
 const $ = (s, el = document) => el.querySelector(s);
@@ -38,6 +39,7 @@ const estado = {
   resumo: null, // { categorias: Set<id>, tamanhos: string[] }
   sacola: carregarSacola(),
   rotaAnterior: "",
+  freteAtivo: undefined, // o cálculo de frete (Melhor Envio) está ligado?
 };
 
 let idRender = 0;
@@ -534,7 +536,8 @@ async function paginaPeca(main, id, codigo) {
         <div class="dobras">
           <details><summary>Envio</summary><p>${escapar(c.envio_info || "Enviamos para todo o Brasil.")}</p></details>
           <details><summary>Retirada</summary><p>${escapar(c.retirada_info || "Retirada combinada pelo WhatsApp.")}</p></details>
-          <details><summary>Como funciona</summary><p>Ao finalizar o pedido, a peça fica reservada para você. Em seguida, combinamos pagamento e entrega pelo WhatsApp.</p></details>
+          <details><summary>Pagamento</summary><p>PIX ou cartão de crédito. Depois do pedido, enviamos pelo WhatsApp a chave PIX ou o link para pagar com cartão.</p></details>
+          <details><summary>Como funciona</summary><p>Ao finalizar o pedido, a peça fica reservada para você. Em seguida, mandamos os dados de pagamento pelo WhatsApp e, assim que o pagamento é confirmado, enviamos a peça ou combinamos a retirada.</p></details>
         </div>
       </div>
     </div>
@@ -595,10 +598,74 @@ async function revalidarSacola() {
   return removidas;
 }
 
+const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+
+// Por enquanto o pagamento é feito à parte: depois do pedido, a loja manda pelo
+// WhatsApp a chave PIX ou um link para pagar com cartão.
+const NOMES_PAGAMENTO = { pix: "PIX", cartao: "Cartão de crédito" };
+
+function textoDadosPagamento(pagamento) {
+  if (pagamento === NOMES_PAGAMENTO.pix) return "a chave PIX";
+  if (pagamento === NOMES_PAGAMENTO.cartao) return "o link para pagar com cartão";
+  return "os dados de pagamento";
+}
+
+/** Confere os dígitos verificadores do CPF. */
+function cpfValido(cpf) {
+  const d = soDigitos(cpf);
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+  for (const tamanho of [9, 10]) {
+    let soma = 0;
+    for (let i = 0; i < tamanho; i++) soma += Number(d[i]) * (tamanho + 1 - i);
+    if (((soma * 10) % 11) % 10 !== Number(d[tamanho])) return false;
+  }
+  return true;
+}
+
+function formatarCpf(valor) {
+  const d = soDigitos(valor).slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+}
+
+function prazoTexto(min, max) {
+  if (!max) return "";
+  if (min === max) return max === 1 ? "1 dia útil" : `${max} dias úteis`;
+  return `${min} a ${max} dias úteis`;
+}
+
+function nomeDoFrete(o) {
+  const empresa = (o.empresa || "").trim();
+  const nome = (o.nome || "").trim();
+  return nome.toLowerCase().startsWith(empresa.toLowerCase()) ? nome : `${empresa} ${nome}`.trim();
+}
+
+function enderecoEmTexto(e) {
+  const linha1 = [e.rua, e.numero].map((x) => (x || "").trim()).filter(Boolean).join(", ");
+  const comComplemento = e.complemento?.trim() ? `${linha1} - ${e.complemento.trim()}` : linha1;
+  const cidade = [e.cidade?.trim(), e.uf?.trim().toUpperCase()].filter(Boolean).join("/");
+  return [comComplemento, e.bairro?.trim(), cidade].filter(Boolean).join(", ");
+}
+
+/** O frete automático (Melhor Envio) está ligado? Guardado durante a visita. */
+async function freteAtivo() {
+  if (estado.freteAtivo !== undefined) return estado.freteAtivo;
+  try {
+    const r = await chamarFuncao("frete", { acao: "ativo" });
+    estado.freteAtivo = Boolean(r?.ativo);
+  } catch {
+    estado.freteAtivo = false;
+  }
+  return estado.freteAtivo;
+}
+
 async function paginaFinalizar(main, id) {
   definirTitulo("Finalizar pedido");
   main.innerHTML = `<div class="finalizar"><h1>Finalizar pedido</h1><div class="esqueleto" style="height:320px"></div></div>`;
-  const removidas = await revalidarSacola();
+  const [removidas, ativoNaEntrada] = await Promise.all([revalidarSacola(), freteAtivo()]);
+  let ativo = ativoNaEntrada;
   if (id !== idRender) return;
 
   if (!estado.sacola.length) {
@@ -619,6 +686,10 @@ async function paginaFinalizar(main, id) {
   } catch {
     dados = {};
   }
+  const d = (k) => escapar(dados[k] || "");
+  const textoEnvio = ativo
+    ? "Correios, Jadlog ou Loggi. O valor aparece assim que você informar o CEP."
+    : c.envio_info || "Frete combinado pelo WhatsApp.";
 
   main.innerHTML = `
     <div class="finalizar">
@@ -628,75 +699,242 @@ async function paginaFinalizar(main, id) {
         <fieldset>
           <legend>Seus dados</legend>
           <div class="formulario">
-            <label class="campo"><span>Nome completo</span><input name="nome" autocomplete="name" required value="${escapar(dados.nome || "")}"></label>
+            <label class="campo"><span>Nome completo</span><input name="nome" autocomplete="name" required value="${d("nome")}"></label>
             <div class="dupla">
-              <label class="campo"><span>WhatsApp</span><input name="telefone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(11) 99999-9999" required value="${escapar(dados.telefone || "")}"></label>
-              <label class="campo"><span>E-mail (opcional)</span><input name="email" type="email" autocomplete="email" value="${escapar(dados.email || "")}"></label>
+              <label class="campo"><span>WhatsApp</span><input name="telefone" type="tel" inputmode="tel" autocomplete="tel" placeholder="(21) 99999-9999" required value="${d("telefone")}"></label>
+              <label class="campo"><span>E-mail (opcional)</span><input name="email" type="email" autocomplete="email" value="${d("email")}"></label>
             </div>
           </div>
         </fieldset>
         <fieldset>
           <legend>Entrega</legend>
           <div class="opcoes-entrega">
-            <label class="opcao"><input type="radio" name="entrega" value="envio" ${dados.entrega !== "retirada" ? "checked" : ""}><strong>Envio</strong><small>${escapar(c.envio_info || "Frete combinado pelo WhatsApp.")}</small></label>
+            <label class="opcao"><input type="radio" name="entrega" value="envio" ${dados.entrega !== "retirada" ? "checked" : ""}><strong>Envio</strong><small>${escapar(textoEnvio)}</small></label>
             <label class="opcao"><input type="radio" name="entrega" value="retirada" ${dados.entrega === "retirada" ? "checked" : ""}><strong>Retirada</strong><small>${escapar(c.retirada_info || "Combinada pelo WhatsApp.")}</small></label>
           </div>
         </fieldset>
-        <div class="formulario" id="campos-endereco">
-          <div class="dupla">
-            <label class="campo"><span>CEP</span><input name="cep" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" value="${escapar(dados.cep || "")}"></label>
-            <span></span>
+        <fieldset id="campos-endereco">
+          <legend>Endereço de entrega</legend>
+          <div class="formulario">
+            <div class="dupla dupla-cep">
+              <label class="campo"><span>CEP</span><input name="cep" inputmode="numeric" autocomplete="postal-code" placeholder="00000-000" value="${d("cep")}"></label>
+              <a class="link-cep" href="https://buscacepinter.correios.com.br/app/endereco/index.php" target="_blank" rel="noopener">Não sei meu CEP</a>
+            </div>
+            <label class="campo"><span>Rua</span><input name="rua" autocomplete="address-line1" value="${d("rua")}"></label>
+            <div class="dupla">
+              <label class="campo"><span>Número</span><input name="numero" autocomplete="off" value="${d("numero")}"></label>
+              <label class="campo"><span>Complemento (opcional)</span><input name="complemento" autocomplete="address-line2" placeholder="Apto, bloco, casa" value="${d("complemento")}"></label>
+            </div>
+            <div class="dupla">
+              <label class="campo"><span>Bairro</span><input name="bairro" value="${d("bairro")}"></label>
+              <div class="cidade-uf">
+                <label class="campo"><span>Cidade</span><input name="cidade" autocomplete="address-level2" value="${d("cidade")}"></label>
+                <label class="campo"><span>UF</span><select name="uf" autocomplete="address-level1"><option value=""></option>${UFS.map((u) => `<option ${dados.uf === u ? "selected" : ""}>${u}</option>`).join("")}</select></label>
+              </div>
+            </div>
+            <label class="campo"><span>CPF <em>para a etiqueta de envio</em></span><input name="cpf" inputmode="numeric" autocomplete="off" placeholder="000.000.000-00"></label>
+            <div class="frete" id="frete" aria-live="polite"></div>
           </div>
-          <label class="campo"><span>Endereço completo</span><textarea name="endereco" rows="2" autocomplete="street-address" placeholder="Rua, número, complemento, bairro, cidade">${escapar(dados.endereco || "")}</textarea></label>
-        </div>
+        </fieldset>
+        <fieldset>
+          <legend>Pagamento</legend>
+          <div class="opcoes-entrega">
+            <label class="opcao"><input type="radio" name="pagamento" value="pix" ${dados.pagamento !== "cartao" ? "checked" : ""}><strong>PIX</strong><small>Enviamos a chave PIX pelo WhatsApp para você concluir o pagamento.</small></label>
+            <label class="opcao"><input type="radio" name="pagamento" value="cartao" ${dados.pagamento === "cartao" ? "checked" : ""}><strong>Cartão de crédito</strong><small>Enviamos pelo WhatsApp um link para pagar com cartão.</small></label>
+          </div>
+        </fieldset>
         <label class="campo"><span>Observações (opcional)</span><textarea name="observacoes" rows="2"></textarea></label>
         <div class="aviso erro oculto" id="erro-pedido"></div>
         <button class="botao largo" type="submit" id="enviar-pedido">Confirmar pedido</button>
-        <small style="color:var(--taupe)">Ao confirmar, as peças ficam reservadas para você. Pagamento e frete são combinados em seguida pelo WhatsApp.</small>
+        <small style="color:var(--taupe)" id="nota-pedido"></small>
       </form>
       <aside class="resumo">
         <h2>Resumo</h2>
         ${estado.sacola.map((i) => itemSacolaHtml(i, false)).join("")}
-        <div class="linha-total"><span>Total das peças</span><strong>${formatarPreco(totalDaSacola())}</strong></div>
-        <small>Frete a combinar, se houver envio.</small>
+        <div class="linha-resumo"><span>Peças</span><span>${formatarPreco(totalDaSacola())}</span></div>
+        <div class="linha-resumo"><span>Frete</span><span id="resumo-frete">—</span></div>
+        <div class="linha-resumo"><span>Pagamento</span><span id="resumo-pagamento">${dados.pagamento === "cartao" ? NOMES_PAGAMENTO.cartao : NOMES_PAGAMENTO.pix}</span></div>
+        <div class="linha-total"><span>Total</span><strong id="resumo-total">${formatarPreco(totalDaSacola())}</strong></div>
       </aside>
     </div>`;
 
   const form = $("#form-pedido");
-  const camposEndereco = $("#campos-endereco");
+  const frete = { cep: "", carregando: false, opcoes: [], erro: "", escolhido: Number(dados.frete) || null, pedido: 0 };
+
+  const ehEnvio = () => form.entrega.value === "envio";
+  const cepDigitado = () => soDigitos(form.cep.value);
+  const opcaoEscolhida = () => (ativo ? frete.opcoes.find((o) => o.id === frete.escolhido) : null);
+  const freteACombinar = () => !ativo || Boolean(frete.erro) || (frete.cep && !frete.carregando && !frete.opcoes.length);
+
+  function desenharFrete() {
+    const el = $("#frete");
+    let html = "";
+    if (!ativo) {
+      html = `<p class="frete-aviso">O frete é combinado pelo WhatsApp depois do pedido.</p>`;
+    } else if (cepDigitado().length !== 8) {
+      html = `<p class="frete-aviso">Informe o CEP para ver as opções de frete.</p>`;
+    } else if (frete.carregando) {
+      html = `<p class="frete-aviso"><span class="girando"></span>Calculando o frete…</p>`;
+    } else if (frete.erro) {
+      html = `<p class="frete-aviso">${escapar(frete.erro)} Se preferir, confirme assim mesmo: o frete fica para combinar pelo WhatsApp.</p>`;
+    } else if (!frete.opcoes.length && frete.cep) {
+      html = `<p class="frete-aviso">Nenhuma transportadora atende este CEP pelo site. O frete fica para combinar pelo WhatsApp.</p>`;
+    } else if (frete.opcoes.length) {
+      html = `<span class="frete-titulo">Frete</span>
+        <div class="opcoes-frete">
+          ${frete.opcoes
+            .map(
+              (o) => `
+            <label class="opcao-frete">
+              <input type="radio" name="frete" value="${o.id}" ${o.id === frete.escolhido ? "checked" : ""}>
+              <span class="frete-servico"><strong>${escapar(nomeDoFrete(o))}</strong><small>${prazoTexto(o.prazo_min, o.prazo_max)}</small></span>
+              <span class="frete-valor">${formatarPreco(o.valor)}</span>
+            </label>`,
+            )
+            .join("")}
+        </div>`;
+    }
+    el.innerHTML = html;
+    atualizarResumo();
+  }
+
+  function atualizarResumo() {
+    const pecas = totalDaSacola();
+    const opcao = ehEnvio() ? opcaoEscolhida() : null;
+    let textoFrete = "—";
+    if (!ehEnvio()) textoFrete = "Retirada";
+    else if (opcao) textoFrete = formatarPreco(opcao.valor);
+    else if (freteACombinar()) textoFrete = "A combinar";
+    $("#resumo-frete").textContent = textoFrete;
+    $("#resumo-total").textContent = formatarPreco(pecas + (opcao ? opcao.valor : 0));
+    $("#nota-pedido").textContent =
+      ehEnvio() && !freteACombinar()
+        ? "Ao confirmar, as peças ficam reservadas para você e enviamos os dados de pagamento pelo WhatsApp."
+        : "Ao confirmar, as peças ficam reservadas para você. Pelo WhatsApp enviamos os dados de pagamento e combinamos a entrega.";
+  }
+
+  async function cotar() {
+    const cep = cepDigitado();
+    if (!ativo || cep.length !== 8 || !ehEnvio()) {
+      desenharFrete();
+      return;
+    }
+    if (cep === frete.cep && (frete.carregando || frete.opcoes.length)) return;
+    const pedido = ++frete.pedido;
+    Object.assign(frete, { cep, carregando: true, erro: "", opcoes: [] });
+    desenharFrete();
+    let resposta = null;
+    try {
+      resposta = await chamarFuncao("frete", { acao: "cotar", cep, pecas: estado.sacola.map((i) => i.id) });
+    } catch (e) {
+      resposta = { ok: false, erro: mensagemDeErro(e) };
+    }
+    if (pedido !== frete.pedido || id !== idRender) return;
+    frete.carregando = false;
+    if (resposta?.ok && resposta.ativo === false) {
+      // o frete automático foi desligado no meio da visita: volta a ser combinado
+      estado.freteAtivo = false;
+      ativo = false;
+      desenharFrete();
+      return;
+    }
+    if (!resposta?.ok) {
+      frete.erro = resposta?.erro || "Não foi possível calcular o frete agora.";
+    } else {
+      frete.opcoes = resposta.opcoes || [];
+      if (!frete.opcoes.some((o) => o.id === frete.escolhido)) frete.escolhido = frete.opcoes[0]?.id ?? null;
+    }
+    desenharFrete();
+  }
+
   const atualizarEntrega = () => {
-    camposEndereco.classList.toggle("oculto", form.entrega.value !== "envio");
+    $("#campos-endereco").classList.toggle("oculto", !ehEnvio());
+    cotar();
+    atualizarResumo();
   };
+
   form.addEventListener("change", (e) => {
     if (e.target.name === "entrega") atualizarEntrega();
+    if (e.target.name === "frete") {
+      frete.escolhido = Number(e.target.value);
+      atualizarResumo();
+    }
+    if (e.target.name === "pagamento") {
+      $("#resumo-pagamento").textContent = NOMES_PAGAMENTO[e.target.value] || NOMES_PAGAMENTO.pix;
+    }
   });
   form.addEventListener("input", () => $("#erro-pedido").classList.add("oculto"));
-  atualizarEntrega();
 
   form.cep.addEventListener("input", () => {
-    const d = soDigitos(form.cep.value).slice(0, 8);
-    form.cep.value = d.length > 5 ? `${d.slice(0, 5)}-${d.slice(5)}` : d;
-    if (d.length === 8 && !form.endereco.value.trim()) buscarCep(d, form.endereco);
+    const cep = cepDigitado().slice(0, 8);
+    form.cep.value = cep.length > 5 ? `${cep.slice(0, 5)}-${cep.slice(5)}` : cep;
+    if (cep.length === 8) {
+      buscarCep(cep, form);
+      cotar();
+    } else if (frete.cep) {
+      Object.assign(frete, { cep: "", opcoes: [], erro: "", carregando: false });
+      frete.pedido++;
+      desenharFrete();
+    }
   });
+  form.cpf.addEventListener("input", () => {
+    form.cpf.value = formatarCpf(form.cpf.value);
+  });
+
+  atualizarEntrega();
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const erro = $("#erro-pedido");
+    const mostrarErro = (texto) => {
+      erro.textContent = texto;
+      erro.classList.remove("oculto");
+    };
     erro.classList.add("oculto");
     const v = Object.fromEntries(new FormData(form).entries());
+    const envio = v.entrega === "envio";
+    const pagamento = NOMES_PAGAMENTO[v.pagamento] || NOMES_PAGAMENTO.pix;
+    // A forma de pagamento escolhida vai na primeira linha das observações do pedido.
+    const observacoes = [`Pagamento: ${pagamento}`, (v.observacoes || "").trim()].filter(Boolean).join("\n");
+    const endereco = {
+      rua: (v.rua || "").trim(),
+      numero: (v.numero || "").trim(),
+      complemento: (v.complemento || "").trim(),
+      bairro: (v.bairro || "").trim(),
+      cidade: (v.cidade || "").trim(),
+      uf: (v.uf || "").trim().toUpperCase(),
+    };
     const problemas = [];
     if (!v.nome?.trim()) problemas.push("seu nome");
     if (soDigitos(v.telefone).length < 10) problemas.push("um WhatsApp com DDD");
-    if (v.entrega === "envio" && !v.endereco?.trim()) problemas.push("o endereço de entrega");
+    if (envio) {
+      if (soDigitos(v.cep).length !== 8) problemas.push("o CEP");
+      if (!endereco.rua || !endereco.numero || !endereco.bairro || !endereco.cidade || !endereco.uf) {
+        problemas.push("o endereço completo (rua, número, bairro, cidade e UF)");
+      }
+      if (!cpfValido(v.cpf)) problemas.push("um CPF válido");
+    }
     if (problemas.length) {
-      erro.textContent = `Falta informar ${problemas.join(", ")}.`;
-      erro.classList.remove("oculto");
+      mostrarErro(`Falta informar ${problemas.join(", ")}.`);
+      return;
+    }
+    const comFrete = envio && ativo && frete.opcoes.length > 0 && !frete.erro;
+    if (envio && ativo && frete.carregando) {
+      mostrarErro("Aguarde o cálculo do frete.");
+      return;
+    }
+    if (comFrete && !opcaoEscolhida()) {
+      mostrarErro("Escolha uma opção de frete.");
       return;
     }
     try {
-      localStorage.setItem("dados-cliente", JSON.stringify({
-        nome: v.nome, telefone: v.telefone, email: v.email, entrega: v.entrega, cep: v.cep, endereco: v.endereco,
-      }));
+      localStorage.setItem(
+        "dados-cliente",
+        JSON.stringify({
+          nome: v.nome, telefone: v.telefone, email: v.email, entrega: v.entrega, cep: v.cep,
+          ...endereco, frete: frete.escolhido, pagamento: v.pagamento,
+        }),
+      );
     } catch {
       /* ignora */
     }
@@ -705,32 +943,62 @@ async function paginaFinalizar(main, id) {
     botao.disabled = true;
     botao.innerHTML = `<span class="girando"></span>`;
     const itens = [...estado.sacola];
-    const { data, error } = await sb.rpc("criar_pedido", {
-      p_nome: v.nome,
-      p_telefone: v.telefone,
-      p_email: v.email || "",
-      p_entrega: v.entrega,
-      p_endereco: v.entrega === "envio" ? v.endereco : "",
-      p_cep: v.entrega === "envio" ? v.cep : "",
-      p_observacoes: v.observacoes || "",
-      p_pecas: itens.map((i) => i.id),
-    });
+    const textoEndereco = envio ? enderecoEmTexto(endereco) : "";
+    let data = null;
+    let falha = null;
+    try {
+      if (comFrete) {
+        data = await chamarFuncao("frete", {
+          acao: "pedido",
+          servico: frete.escolhido,
+          pecas: itens.map((i) => i.id),
+          dados: {
+            nome: v.nome, telefone: v.telefone, email: v.email || "", cpf: v.cpf, cep: v.cep,
+            observacoes, ...endereco,
+          },
+        });
+      } else {
+        const r = await sb.rpc("fazer_pedido", {
+          p_nome: v.nome,
+          p_telefone: v.telefone,
+          p_email: v.email || "",
+          p_entrega: v.entrega,
+          p_endereco: textoEndereco,
+          p_cep: envio ? v.cep : "",
+          p_observacoes: observacoes,
+          p_pecas: itens.map((i) => i.id),
+          p_cpf: envio ? soDigitos(v.cpf) : "",
+          p_end: envio ? endereco : null,
+        });
+        if (r.error) falha = r.error;
+        data = r.data;
+      }
+    } catch (e2) {
+      falha = e2;
+    }
     botao.disabled = false;
     botao.textContent = "Confirmar pedido";
 
-    if (error) {
-      erro.textContent = mensagemDeErro(error);
-      erro.classList.remove("oculto");
+    if (falha) {
+      mostrarErro(mensagemDeErro(falha));
       return;
     }
-    if (!data?.ok) {
-      const fora = new Set(data?.indisponiveis || []);
+    if (!data?.ok && data?.indisponiveis) {
+      const fora = new Set(data.indisponiveis);
       const nomes = itens.filter((i) => fora.has(i.id)).map((i) => i.titulo);
       estado.sacola = estado.sacola.filter((i) => !fora.has(i.id));
       salvarSacola();
       estado.resumo = null;
       avisar(`Acabou de ser reservada: ${nomes.join(", ")}.`, "erro");
       renderizar();
+      return;
+    }
+    if (!data?.ok) {
+      mostrarErro(data?.erro || "Não foi possível confirmar o pedido. Tente de novo.");
+      if (data?.recotar) {
+        frete.cep = "";
+        cotar();
+      }
       return;
     }
 
@@ -740,7 +1008,9 @@ async function paginaFinalizar(main, id) {
       itens,
       nome: v.nome.trim(),
       entrega: v.entrega,
-      endereco: v.entrega === "envio" ? `${v.endereco.trim()}${v.cep ? ` (CEP ${v.cep})` : ""}` : "",
+      endereco: envio ? `${textoEndereco} (CEP ${v.cep})` : "",
+      frete: comFrete && data.frete ? data.frete : null,
+      pagamento,
     };
     try {
       sessionStorage.setItem(`pedido-${data.numero}`, JSON.stringify(pedido));
@@ -754,35 +1024,47 @@ async function paginaFinalizar(main, id) {
   });
 }
 
-async function buscarCep(cep, campo) {
+async function buscarCep(cep, form) {
   try {
     const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
     const d = await r.json();
-    if (d && !d.erro && !campo.value.trim()) {
-      // "Rua X, nº |, Bairro, Cidade - UF": o cursor fica onde falta o número.
-      const rua = d.logradouro ? `${d.logradouro}, nº ` : "";
-      const resto = [d.bairro, d.localidade ? `${d.localidade}${d.uf ? ` - ${d.uf}` : ""}` : ""]
-        .filter(Boolean)
-        .join(", ");
-      campo.value = rua && resto ? `${rua}, ${resto}` : rua || resto;
-      campo.focus();
-      campo.setSelectionRange(rua.length, rua.length);
-    }
+    if (!d || d.erro || soDigitos(form.cep.value) !== cep) return;
+    const preencher = (campo, valor) => {
+      if (valor && !form[campo].value.trim()) form[campo].value = valor;
+    };
+    preencher("rua", d.logradouro);
+    preencher("bairro", d.bairro);
+    preencher("cidade", d.localidade);
+    if (d.uf && !form.uf.value) form.uf.value = d.uf;
+    if (d.logradouro && !form.numero.value.trim() && document.activeElement === form.cep) form.numero.focus();
   } catch {
     /* sem problema: a pessoa digita o endereço */
   }
 }
 
 function mensagemDoPedido(pedido) {
+  const f = pedido.frete;
   const linhas = [
     `Olá! Acabei de fazer o pedido nº ${pedido.numero} no site.`,
     "",
     ...pedido.itens.map((i) => `• ${i.titulo}${i.tamanho ? ` (tam. ${i.tamanho})` : ""}, cód. ${i.codigo}: ${formatarPreco(i.preco)}`),
     "",
-    `Total das peças: ${formatarPreco(pedido.total)}`,
-    pedido.entrega === "envio" ? `Entrega: envio para ${pedido.endereco}` : "Entrega: retirada",
-    `Nome: ${pedido.nome}`,
   ];
+  if (f) {
+    linhas.push(
+      `Peças: ${formatarPreco(pedido.total)}`,
+      `Frete: ${nomeDoFrete(f)}, ${formatarPreco(f.valor)} (${prazoTexto(f.prazo_min, f.prazo_max)})`,
+      `Total: ${formatarPreco(pedido.total + Number(f.valor))}`,
+      `Entrega: envio para ${pedido.endereco}`,
+    );
+  } else {
+    linhas.push(
+      `Total das peças: ${formatarPreco(pedido.total)}`,
+      pedido.entrega === "envio" ? `Entrega: envio para ${pedido.endereco} (frete a combinar)` : "Entrega: retirada",
+    );
+  }
+  if (pedido.pagamento) linhas.push(`Pagamento: ${pedido.pagamento}`);
+  linhas.push(`Nome: ${pedido.nome}`);
   return linhas.join("\n");
 }
 
@@ -796,25 +1078,38 @@ function paginaConfirmacao(main, id, numero) {
   }
   const c = estado.config;
   const temWhats = Boolean(numeroWhatsapp(c.whatsapp));
+  const f = pedido?.frete;
+  const combinar = !pedido ? "" : pedido.entrega === "envio" ? (f ? "" : " e combinamos o frete") : " e combinamos a retirada";
+  const dadosPagamento = textoDadosPagamento(pedido?.pagamento);
+  const linhaPagamento = pedido?.pagamento
+    ? `<div class="linha-resumo"><span>Pagamento</span><span>${escapar(pedido.pagamento)}</span></div>`
+    : "";
   main.innerHTML = `
     <div class="confirmacao">
       <span class="rotulo">Pedido nº ${escapar(numero)}</span>
       <h1>Obrigada! Suas peças estão reservadas.</h1>
       ${
         pedido && temWhats
-          ? `<p>Para concluir, envie o pedido pelo WhatsApp. Lá combinamos o pagamento${pedido.entrega === "envio" ? " e o frete" : " e a retirada"}.</p>
+          ? `<p>Para concluir, envie o pedido pelo WhatsApp. Por lá mandamos ${dadosPagamento}${combinar}.</p>
              <div class="botoes">
                <a class="botao argila" href="${linkWhatsapp(c.whatsapp, mensagemDoPedido(pedido))}" target="_blank" rel="noopener">Enviar pedido pelo WhatsApp</a>
                <a class="link rotulo" href="#/colecao">Continuar olhando</a>
              </div>`
-          : `<p>Recebemos seu pedido e vamos falar com você pelo WhatsApp informado para combinar pagamento e entrega.</p>
+          : `<p>Recebemos seu pedido. Vamos chamar você no WhatsApp informado para enviar ${dadosPagamento}${combinar}.</p>
              <div class="botoes"><a class="botao" href="#/colecao">Continuar olhando</a></div>`
       }
       ${
         pedido?.itens?.length
           ? `<div class="pedido-resumo">
                ${pedido.itens.map((i) => itemSacolaHtml(i, false)).join("")}
-               <div class="linha-total"><span>Total das peças</span><strong>${formatarPreco(pedido.total)}</strong></div>
+               ${
+                 f
+                   ? `<div class="linha-resumo"><span>Peças</span><span>${formatarPreco(pedido.total)}</span></div>
+                      <div class="linha-resumo"><span>${escapar(nomeDoFrete(f))}<small>${prazoTexto(f.prazo_min, f.prazo_max)}</small></span><span>${formatarPreco(f.valor)}</span></div>
+                      <div class="linha-total"><span>Total</span><strong>${formatarPreco(pedido.total + Number(f.valor))}</strong></div>`
+                   : `<div class="linha-total"><span>Total das peças</span><strong>${formatarPreco(pedido.total)}</strong></div>`
+               }
+               ${linhaPagamento}
              </div>`
           : ""
       }

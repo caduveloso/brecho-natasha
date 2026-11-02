@@ -64,7 +64,7 @@
           <header class="aba-topo">
             <div>
               <h1>Cadastro rápido</h1>
-              <p>Envie fotos, prints de conversas ou cole o texto das peças. O sistema lê tudo e cria os rascunhos para você revisar e publicar.</p>
+              <p>Envie fotos, prints de conversas ou de anúncios do Enjoei, ou cole o texto das peças. O sistema lê tudo e cria os rascunhos para você revisar e publicar.</p>
             </div>
           </header>
 
@@ -163,6 +163,7 @@
             </div>
           </header>
           <div class="colunas-loja">
+            <div class="coluna-esquerda">
             <form class="cartao-painel formulario-painel" id="form-config">
               <h2>Dados da loja</h2>
               <label class="campo"><span>Nome da loja</span><input name="nome" required /></label>
@@ -180,6 +181,44 @@
               <label class="campo"><span>Texto sobre retirada</span><textarea name="retirada_info" rows="2"></textarea></label>
               <button class="botao" type="submit">Salvar dados da loja</button>
             </form>
+
+            <form class="cartao-painel formulario-painel" id="form-envio" novalidate>
+              <h2>Envio e etiquetas</h2>
+              <div class="status-envio" id="status-envio">Verificando o Melhor Envio…</div>
+              <p class="dica">Estes dados vão como remetente nas etiquetas e definem o frete calculado no site. Ficam visíveis só aqui no painel.</p>
+              <div class="dupla-painel">
+                <label class="campo"><span>Nome de quem envia</span><input name="nome" autocomplete="name" /></label>
+                <label class="campo"><span>CPF ou CNPJ</span><input name="documento" inputmode="numeric" autocomplete="off" /></label>
+              </div>
+              <div class="dupla-painel">
+                <label class="campo"><span>Telefone</span><input name="telefone" type="tel" placeholder="(21) 99999-9999" /></label>
+                <label class="campo"><span>E-mail</span><input name="email" type="email" /></label>
+              </div>
+              <div class="dupla-painel">
+                <label class="campo"><span>CEP de onde as peças saem</span><input name="cep" inputmode="numeric" placeholder="00000-000" /></label>
+                <label class="campo"><span>Número</span><input name="numero" /></label>
+              </div>
+              <label class="campo"><span>Rua</span><input name="rua" /></label>
+              <div class="dupla-painel">
+                <label class="campo"><span>Complemento</span><input name="complemento" /></label>
+                <label class="campo"><span>Bairro</span><input name="bairro" /></label>
+              </div>
+              <div class="dupla-painel">
+                <label class="campo"><span>Cidade</span><input name="cidade" /></label>
+                <label class="campo"><span>UF</span><input name="uf" maxlength="2" placeholder="RJ" /></label>
+              </div>
+              <fieldset class="grupo-marcar">
+                <legend>Transportadoras oferecidas no site</legend>
+                <div class="lista-marcar" id="lista-transportadoras"></div>
+              </fieldset>
+              <div class="formulario-painel oculto" id="agencias-envio"></div>
+              <div class="dupla-painel">
+                <label class="campo"><span>Dias até postar</span><input name="dias_postagem" type="number" min="0" max="15" /></label>
+                <label class="marcar"><input type="checkbox" name="declarar_valor" /> Declarar o valor das peças (seguro do envio)</label>
+              </div>
+              <button class="botao" type="submit">Salvar dados de envio</button>
+            </form>
+            </div>
 
             <div class="coluna-direita">
               <div class="cartao-painel">
