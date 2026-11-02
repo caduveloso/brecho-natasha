@@ -304,3 +304,13 @@ button {
     scroll-behavior: auto !important;
   }
 }
+
+/* No celular, campos com letra menor que 16px fazem o iPhone dar zoom na tela
+   ao tocar neles. Vale para a loja e para o painel. */
+@media (max-width: 820px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

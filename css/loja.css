@@ -10,6 +10,11 @@
   text-transform: uppercase;
 }
 
+.faixa span + span::before {
+  content: "·";
+  margin: 0 0.7em;
+}
+
 /* Topo */
 .topo {
   position: sticky;
@@ -592,6 +597,11 @@ main {
   border-radius: 20px;
   background: transparent;
   font-size: 13px;
+}
+
+/* Barra de compra fixa no rodapé da tela (só aparece no celular) */
+.barra-compra {
+  display: none;
 }
 
 /* Página da peça */
@@ -1351,6 +1361,78 @@ main {
     display: inline-flex;
   }
 
+  .barra-compra {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 10px var(--margem) calc(10px + env(safe-area-inset-bottom, 0px));
+    background: rgba(246, 242, 236, 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid var(--pedra);
+    transform: translateY(110%);
+    transition: transform 260ms cubic-bezier(0.2, 0.6, 0.2, 1);
+  }
+
+  .barra-compra.visivel {
+    transform: none;
+  }
+
+  .barra-compra-info {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .barra-compra-titulo {
+    overflow: hidden;
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.25;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .barra-compra .preco {
+    font-size: 14px;
+  }
+
+  .barra-compra .preco-antigo {
+    margin-right: 6px;
+    font-size: 12px;
+  }
+
+  .barra-compra .botao {
+    flex: none;
+    min-height: 46px;
+    padding: 0 18px;
+    letter-spacing: 0.12em;
+  }
+
+  /* espaço para a barra não cobrir o fim da página */
+  body:has(.barra-compra) .rodape {
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sobre .abertura-vazia {
+    aspect-ratio: 16 / 9;
+  }
+
+  .sobre .abertura-vazia::before {
+    inset: 14px;
+  }
+
+  .sobre .abertura-vazia span {
+    font-size: 96px;
+  }
+
   .menu-principal {
     display: none;
   }
@@ -1485,22 +1567,57 @@ main {
     grid-template-columns: 1fr;
   }
 
+  /* Filtros em duas linhas: categoria e tamanho; contagem e ordem. */
   .filtros {
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: center;
   }
 
   .filtros-grupo {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+    display: contents;
   }
 
-  .filtros-grupo .filtro:last-child:nth-child(odd) {
+  .filtro {
+    width: 100%;
+    min-width: 0;
+    padding: 0 30px 0 12px;
+    background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+    letter-spacing: 0;
+  }
+
+  #f-cat {
+    order: 1;
+  }
+
+  #f-tam {
+    order: 2;
+  }
+
+  .contagem {
+    order: 3;
+  }
+
+  #f-ordem {
+    order: 4;
+  }
+
+  .limpar-busca {
+    order: 5;
     grid-column: 1 / -1;
+    justify-content: center;
   }
 
   .faixa {
+    overflow: hidden;
     font-size: 9.5px;
     letter-spacing: 0.16em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .faixa-extra {
+    display: none;
   }
 }

@@ -357,6 +357,8 @@ async function paginaColecao(main, id, params) {
   const ordem = params.get("ordem") || "recentes";
   const busca = (params.get("busca") || "").trim();
   const categoria = estado.categorias.find((c) => c.slug === catSlug);
+  // No celular os filtros ficam lado a lado; rótulos curtos cabem sem cortar.
+  const telaPequena = window.matchMedia("(max-width: 480px)").matches;
 
   const titulo = busca ? `“${busca}”` : categoria ? categoria.nome : ordem === "recentes" && params.has("ordem") ? "Novidades" : "Coleção";
   definirTitulo(busca ? `Busca: ${busca}` : titulo);
@@ -370,11 +372,11 @@ async function paginaColecao(main, id, params) {
       <div class="filtros-grupo">
         <label class="sr" for="f-cat">Categoria</label>
         <select class="filtro" id="f-cat">
-          <option value="">Todas as categorias</option>
+          <option value="">${telaPequena ? "Categoria" : "Todas as categorias"}</option>
           ${estado.categorias.map((c) => `<option value="${escapar(c.slug)}" ${c.slug === catSlug ? "selected" : ""}>${escapar(c.nome)}</option>`).join("")}
         </select>
         <label class="sr" for="f-tam">Tamanho</label>
-        <select class="filtro" id="f-tam"><option value="">Todos os tamanhos</option></select>
+        <select class="filtro" id="f-tam"><option value="">${telaPequena ? "Tamanho" : "Todos os tamanhos"}</option></select>
         <label class="sr" for="f-ordem">Ordenar</label>
         <select class="filtro" id="f-ordem">
           <option value="recentes" ${ordem === "recentes" ? "selected" : ""}>Mais recentes</option>
@@ -544,12 +546,35 @@ async function paginaPeca(main, id, codigo) {
     <section class="secao oculto" id="relacionadas">
       <div class="secao-titulo"><h2>Você também pode gostar</h2></div>
       <div class="grade" id="grade-relacionadas"></div>
-    </section>`;
+    </section>
+    ${
+      disponivel
+        ? `<div class="barra-compra" id="barra-compra" aria-hidden="true">
+             <div class="barra-compra-info">
+               <span class="barra-compra-titulo">${escapar(p.titulo)}</span>
+               <span class="preco">${precoHtml(p)}</span>
+             </div>
+             <button class="botao" type="button" id="barra-compra-botao" tabindex="-1">${naSacola ? "Ver na sacola" : "Adicionar à sacola"}</button>
+           </div>`
+        : ""
+    }`;
 
   $("#botao-sacola")?.addEventListener("click", () => {
     adicionarNaSacola(p);
     $("#botao-sacola").textContent = "Ver na sacola";
+    const botaoBarra = $("#barra-compra-botao");
+    if (botaoBarra) botaoBarra.textContent = "Ver na sacola";
   });
+
+  // No celular, a barra de compra aparece no rodapé da tela sempre que o botão
+  // principal não está à vista (por exemplo, enquanto a pessoa vê as fotos).
+  estado.observadorBarra?.disconnect();
+  const barra = $("#barra-compra");
+  if (barra && "IntersectionObserver" in window) {
+    $("#barra-compra-botao").addEventListener("click", () => $("#botao-sacola")?.click());
+    estado.observadorBarra = new IntersectionObserver(([e]) => barra.classList.toggle("visivel", !e.isIntersecting));
+    estado.observadorBarra.observe($("#botao-sacola"));
+  }
 
   const principal = $("#galeria-principal");
   $$(".galeria-miniaturas button").forEach((b) =>
@@ -1158,9 +1183,9 @@ function desenharMoldura() {
   $("#logo-rodape").innerHTML = logotipoHtml(c.nome);
   $("#rodape-slogan").textContent = c.slogan;
   $("#rodape-copy").textContent = `© ${new Date().getFullYear()} ${c.nome}`;
-  $("#faixa").innerHTML = `Peças únicas &nbsp;·&nbsp; Curadoria cuidadosa &nbsp;·&nbsp; ${
+  $("#faixa").innerHTML = `<span>Peças únicas</span><span class="faixa-extra">Curadoria cuidadosa</span><span>${
     c.cidade ? escapar(c.cidade) : "Envio para todo o Brasil"
-  }`;
+  }</span>`;
   const contato = $("#rodape-contato");
   const links = [];
   if (numeroWhatsapp(c.whatsapp))
