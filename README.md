@@ -67,10 +67,12 @@ Uma peça só pode ser publicada com título, preço e pelo menos uma foto; o ba
 ### Pedidos
 
 1. A cliente coloca as peças na sacola e clica em **Finalizar pedido**.
-2. Informa nome, WhatsApp e se quer envio ou retirada. No envio, o CEP preenche rua, bairro, cidade e UF; ela completa número, complemento e CPF (exigido na etiqueta). Por fim, escolhe como vai pagar: PIX ou cartão de crédito.
+2. Informa nome, WhatsApp e se quer envio ou retirada. No envio, o CEP preenche rua, bairro, cidade e UF; ela completa número, complemento e CPF (exigido na etiqueta).
 3. Com o Melhor Envio ligado, as opções de frete aparecem na hora, com transportadora, prazo e preço, e o total já inclui o frete escolhido. Sem ele (ou se a cotação falhar), o pedido segue com frete a combinar.
 4. Ao confirmar, as peças ficam **Reservadas** na hora (duas pessoas nunca compram a mesma peça) e o pedido aparece na aba **Pedidos**, com um aviso de novo pedido.
-5. A cliente é convidada a enviar o pedido pelo WhatsApp da loja, já com peças, frete, total, endereço e forma de pagamento escritos.
+5. O pagamento depende da cobrança pelo site (veja abaixo):
+   - **Ligada:** a cliente vai direto para a página segura do Mercado Pago e paga com PIX ou cartão (à vista ou parcelado). Quando o pagamento é aprovado, o pedido vira **Pago** sozinho.
+   - **Desligada:** ela escolhe PIX ou cartão no site e é convidada a enviar o pedido pelo WhatsApp da loja, já com peças, frete, total, endereço e forma de pagamento escritos. A cobrança é combinada por lá.
 
 Na aba **Pedidos**, o botão **WhatsApp** abre a conversa com a cliente. Ao mudar a situação, as peças acompanham:
 
@@ -78,9 +80,31 @@ Na aba **Pedidos**, o botão **WhatsApp** abre a conversa com a cliente. Ao muda
 - **Pago**, **Enviado**, **Concluído**: peças vendidas.
 - **Cancelado**: peças voltam a ficar disponíveis.
 
-**Pagamento (por enquanto, à parte):** a forma escolhida pela cliente aparece no pedido, mas o site ainda não cobra sozinho. Responda pelo WhatsApp com a chave PIX ou com um link para pagar com cartão (gerado no Mercado Pago, PagSeguro, InfinitePay ou na maquininha que você já usa). Quando o pagamento cair, mude o pedido para **Pago**. A cobrança automática no site (PIX e cartão) fica para a próxima etapa.
+Cada pedido mostra como foi pago: **Pago pelo site** (com a forma, as parcelas e o número do pagamento no Mercado Pago), **Aguardando pagamento pelo site** (com o horário até quando as peças ficam reservadas) ou, com a cobrança desligada, a forma que a cliente escolheu. Quando algo pede sua atenção (valor pago diferente do pedido, pagamento em dobro, estorno, reclamação ou pagamento que chegou depois da reserva vencer), um alerta aparece no pedido.
 
 Pedidos com frete escolhido no site mostram o botão **Gerar etiqueta** (veja abaixo).
+
+### Pagamento pelo site (PIX e cartão no Mercado Pago)
+
+O site cobra pelo [Mercado Pago](https://www.mercadopago.com.br) (Checkout Pro): a cliente paga numa página segura do próprio Mercado Pago, com PIX ou cartão, e o dinheiro cai na conta Mercado Pago da loja. O site nunca vê os dados do cartão. Enquanto a cobrança estiver desligada, tudo funciona como antes, com o pagamento combinado pelo WhatsApp.
+
+Para ligar:
+
+1. Use a conta Mercado Pago de quem vai receber o dinheiro, com uma **chave PIX cadastrada** nela (sem chave, o PIX não aparece como opção).
+2. Com essa conta, abra [Suas integrações](https://www.mercadopago.com.br/developers/panel/app), crie uma aplicação (pagamentos online, Checkout Pro) e, em **Credenciais › Produção**, toque em **Ativar ambiente de produção** (ele pede o setor e o site da loja).
+3. Copie o **Access Token** de produção (começa com `APP_USR-`). No Supabase, em [Edge Functions › Secrets](https://supabase.com/dashboard/project/vmhbvlyxpxzqclghxvtj/functions/secrets), crie o segredo `MERCADO_PAGO_ACCESS_TOKEN` com ele. O token é como uma senha da conta: não mande por mensagem nem cole em outro lugar.
+4. No painel, em **Loja › Pagamento pelo site**, confira se aparece **Conectado ao Mercado Pago** e marque **Cobrar pelo site**.
+5. Faça uma compra de teste de verdade com um PIX de valor baixo (uma peça barata ou criada só para isso) e depois devolva o valor pelo Mercado Pago.
+
+Como funciona:
+
+- Ao confirmar o pedido, as peças ficam **reservadas por 2 horas** e a cliente vai para o Mercado Pago. O boleto fica de fora, porque leva dias para compensar.
+- Pagou, o pedido vira **Pago** e as peças viram **Vendidas**, sem você fazer nada. A cliente volta para a loja e vê a confirmação; se o PIX demorar a cair, a página atualiza sozinha.
+- Se ela fechar a página sem pagar, um aviso discreto no topo da loja a lembra de voltar e pagar (**Pagar agora**), enquanto a reserva durar.
+- Sem pagamento, o pedido é **cancelado sozinho** um pouco depois do fim da reserva e as peças voltam para a vitrine. Se você combinar outro jeito de pagar com a cliente, mude o pedido para **Pago** antes disso.
+- A taxa do Mercado Pago é descontada de cada venda, conforme as condições da conta (PIX costuma sair mais barato que cartão). O valor líquido de cada venda aparece no Mercado Pago.
+
+Para desligar, é só desmarcar **Cobrar pelo site**: os pedidos novos voltam a ser combinados pelo WhatsApp, e os que já estão no Mercado Pago continuam sendo confirmados.
 
 ### Frete e etiquetas (Melhor Envio)
 
@@ -123,7 +147,7 @@ Cada peça é única e pode estar à venda nos dois lugares, então o cuidado é
 
 ### Loja
 
-Em **Loja** ficam o nome, a frase de abertura, o texto "Sobre", WhatsApp, Instagram, e-mail, cidade, os textos de envio e retirada, as categorias (criar, renomear, reordenar, excluir) e a troca de senha. **Preencha o WhatsApp**: é para ele que os pedidos são enviados.
+Em **Loja** ficam o nome, a frase de abertura, o texto "Sobre", WhatsApp, Instagram, e-mail, cidade, os textos de envio e retirada, as categorias (criar, renomear, reordenar, excluir), a cobrança pelo site, os dados de envio e a troca de senha. **Preencha o WhatsApp**: é para ele que os pedidos são enviados e é por ele que a cliente fala com a loja.
 
 ---
 
@@ -141,7 +165,8 @@ js/imagem.js             redução, recorte e conversão das fotos para WebP
 vendor/                  supabase-js 2.118.0
 supabase/migrations/     banco de dados (tabelas, regras de acesso, funções)
 supabase/functions/      extrair-peca (leitura com o Claude), frete (cotação, pedido
-                         com frete e etiquetas), importar-pecas (carga de anúncios)
+                         com frete e etiquetas), importar-pecas (carga de anúncios),
+                         pagamento (cobrança no Mercado Pago)
 ```
 
 **Supabase** (projeto `brecho-natasha`, região São Paulo):
@@ -154,6 +179,8 @@ supabase/functions/      extrair-peca (leitura com o Claude), frete (cotação, 
 - Edge Function `extrair-peca`: só atende administradoras logadas e usa o segredo `ANTHROPIC_API_KEY`.
 - Edge Function `frete`: cotação e pedido são públicos (o site usa); status, transportadoras, agências e etiquetas só atendem administradoras. Usa o segredo `MELHOR_ENVIO_TOKEN`.
 - Edge Function `importar-pecas`: só atende administradoras logadas ou quem tiver uma chave temporária de importação; baixa fotos apenas de endereços do Enjoei.
+- Edge Function `pagamento`: abre o pagamento do pedido no Mercado Pago (`criar`), mostra a situação na volta da cliente (`situacao`, sem dados pessoais) e recebe os avisos do Mercado Pago (`?aviso=mp`). Não confia no conteúdo do aviso: lê o pagamento direto na API do Mercado Pago, com o segredo `MERCADO_PAGO_ACCESS_TOKEN`, e só aplica ao pedido indicado pelo próprio pagamento (`external_reference`). O valor cobrado vem do banco, nunca do navegador. As funções do banco que ela usa (`pagamento_pedido`, `pagamento_salvar_link`, `aplicar_pagamento`, `pagamento_vencidos`, `expirar_pedido`) só podem ser chamadas pelo servidor. `status` só atende administradoras.
+- A cada 10 minutos, o `pg_cron` do banco chama a ação `expirar`, que confere no Mercado Pago os pedidos com a reserva vencida e cancela os que não têm pagamento aprovado ou em análise. Sem o token, ela não faz nada.
 
 A chave em `js/config.js` é a chave **pública** do Supabase, feita para ficar no navegador; a segurança vem das regras de acesso do banco. Nenhum segredo fica no código.
 
@@ -161,8 +188,8 @@ A chave em `js/config.js` é a chave **pública** do Supabase, feita para ficar 
 
 - **Site:** qualquer commit na branch `main` é publicado pelo GitHub Pages em cerca de um minuto (Settings › Pages, origem "Deploy from a branch", `main`, pasta raiz).
 - **Banco:** as migrações ficam em `supabase/migrations`, em ordem de data. Mudanças novas entram como novos arquivos nessa pasta.
-- **Funções:** `supabase functions deploy extrair-peca --no-verify-jwt` (e o mesmo para `frete` e `importar-pecas`). Todas fazem a própria checagem de acesso.
-- **Testes das regras de frete:** `deno test supabase/functions/frete/`.
+- **Funções:** `supabase functions deploy extrair-peca --no-verify-jwt` (e o mesmo para `frete`, `importar-pecas` e `pagamento`). Todas fazem a própria checagem de acesso; `pagamento` precisa do `--no-verify-jwt` também porque o Mercado Pago chama a função sem login.
+- **Testes das regras:** `deno test supabase/functions/frete/` e `deno test supabase/functions/pagamento/`.
 
 ### Cuidados
 

@@ -31,6 +31,7 @@ const CONFIG_PADRAO = {
   cidade: "",
   envio_info: "",
   retirada_info: "",
+  pagamento_online: false,
 };
 
 const estado = {
@@ -40,6 +41,7 @@ const estado = {
   sacola: carregarSacola(),
   rotaAnterior: "",
   freteAtivo: undefined, // o cálculo de frete (Melhor Envio) está ligado?
+  retorno: null, // volta do Mercado Pago: { pedido, pagamento }
 };
 
 let idRender = 0;
@@ -538,8 +540,13 @@ async function paginaPeca(main, id, codigo) {
         <div class="dobras">
           <details><summary>Envio</summary><p>${escapar(c.envio_info || "Enviamos para todo o Brasil.")}</p></details>
           <details><summary>Retirada</summary><p>${escapar(c.retirada_info || "Retirada combinada pelo WhatsApp.")}</p></details>
-          <details><summary>Pagamento</summary><p>PIX ou cartão de crédito. Depois do pedido, enviamos pelo WhatsApp a chave PIX ou o link para pagar com cartão.</p></details>
-          <details><summary>Como funciona</summary><p>Ao finalizar o pedido, a peça fica reservada para você. Em seguida, mandamos os dados de pagamento pelo WhatsApp e, assim que o pagamento é confirmado, enviamos a peça ou combinamos a retirada.</p></details>
+          ${
+            pagamentoOnline()
+              ? `<details><summary>Pagamento</summary><p>PIX ou cartão de crédito, à vista ou parcelado, na página segura do Mercado Pago, logo ao finalizar o pedido.</p></details>
+                 <details><summary>Como funciona</summary><p>Ao finalizar o pedido, a peça fica reservada por ${RESERVA_HORAS} horas enquanto você paga. Assim que o pagamento é aprovado, enviamos a peça ou combinamos a retirada.</p></details>`
+              : `<details><summary>Pagamento</summary><p>PIX ou cartão de crédito. Depois do pedido, enviamos pelo WhatsApp a chave PIX ou o link para pagar com cartão.</p></details>
+                 <details><summary>Como funciona</summary><p>Ao finalizar o pedido, a peça fica reservada para você. Em seguida, mandamos os dados de pagamento pelo WhatsApp e, assim que o pagamento é confirmado, enviamos a peça ou combinamos a retirada.</p></details>`
+          }
         </div>
       </div>
     </div>
@@ -625,9 +632,66 @@ async function revalidarSacola() {
 
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
-// Por enquanto o pagamento é feito à parte: depois do pedido, a loja manda pelo
-// WhatsApp a chave PIX ou um link para pagar com cartão.
+// Pagamento. Com a cobrança pelo site ligada (painel › Loja), a cliente paga no
+// Mercado Pago logo depois do pedido e a confirmação chega sozinha. Desligada, a loja
+// manda pelo WhatsApp a chave PIX ou um link para pagar com cartão.
 const NOMES_PAGAMENTO = { pix: "PIX", cartao: "Cartão de crédito" };
+const RESERVA_HORAS = 2; // igual a RESERVA_MINUTOS na Edge Function "pagamento"
+const CHAVE_PENDENTE = "pedido-pendente";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function pagamentoOnline() {
+  return Boolean(estado.config.pagamento_online);
+}
+
+/** Pedido que ainda espera pagamento neste aparelho (para a cliente voltar a pagar). */
+function lerPendente() {
+  try {
+    const p = JSON.parse(localStorage.getItem(CHAVE_PENDENTE) || "null");
+    return p && UUID.test(p.id || "") ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+function guardarPendente(p) {
+  try {
+    localStorage.setItem(CHAVE_PENDENTE, JSON.stringify(p));
+  } catch {
+    /* sem armazenamento: o aviso de pedido pendente não aparece */
+  }
+}
+
+function esquecerPendente(id) {
+  if (id && lerPendente()?.id !== id) return;
+  try {
+    localStorage.removeItem(CHAVE_PENDENTE);
+  } catch {
+    /* ignora */
+  }
+}
+
+function horaCurta(iso) {
+  const d = new Date(iso);
+  return isNaN(d) ? "" : d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Abre a página de pagamento do Mercado Pago. Se não der, devolve o motivo. */
+async function abrirPagamento(pedidoId) {
+  let r = null;
+  try {
+    r = await chamarFuncao("pagamento", { acao: "criar", pedido: pedidoId });
+  } catch (e) {
+    r = { ok: false, erro: mensagemDeErro(e) };
+  }
+  if (r?.ok && r.link) {
+    const pendente = lerPendente();
+    if (pendente?.id === pedidoId) guardarPendente({ ...pendente, limite: r.limite });
+    location.assign(r.link);
+    return r;
+  }
+  return r || { ok: false };
+}
 
 function textoDadosPagamento(pagamento) {
   if (pagamento === NOMES_PAGAMENTO.pix) return "a chave PIX";
@@ -705,6 +769,8 @@ async function paginaFinalizar(main, id) {
   }
 
   const c = estado.config;
+  const online = pagamentoOnline();
+  const textoBotao = online ? "Ir para o pagamento" : "Confirmar pedido";
   let dados = {};
   try {
     dados = JSON.parse(localStorage.getItem("dados-cliente") || "{}");
@@ -763,14 +829,21 @@ async function paginaFinalizar(main, id) {
         </fieldset>
         <fieldset>
           <legend>Pagamento</legend>
-          <div class="opcoes-entrega">
-            <label class="opcao"><input type="radio" name="pagamento" value="pix" ${dados.pagamento !== "cartao" ? "checked" : ""}><strong>PIX</strong><small>Enviamos a chave PIX pelo WhatsApp para você concluir o pagamento.</small></label>
-            <label class="opcao"><input type="radio" name="pagamento" value="cartao" ${dados.pagamento === "cartao" ? "checked" : ""}><strong>Cartão de crédito</strong><small>Enviamos pelo WhatsApp um link para pagar com cartão.</small></label>
-          </div>
+          ${
+            online
+              ? `<div class="opcao opcao-fixa">
+                   <strong>PIX ou cartão de crédito</strong>
+                   <small>Depois de confirmar, você paga na página segura do Mercado Pago, à vista ou parcelado no cartão.</small>
+                 </div>`
+              : `<div class="opcoes-entrega">
+                   <label class="opcao"><input type="radio" name="pagamento" value="pix" ${dados.pagamento !== "cartao" ? "checked" : ""}><strong>PIX</strong><small>Enviamos a chave PIX pelo WhatsApp para você concluir o pagamento.</small></label>
+                   <label class="opcao"><input type="radio" name="pagamento" value="cartao" ${dados.pagamento === "cartao" ? "checked" : ""}><strong>Cartão de crédito</strong><small>Enviamos pelo WhatsApp um link para pagar com cartão.</small></label>
+                 </div>`
+          }
         </fieldset>
         <label class="campo"><span>Observações (opcional)</span><textarea name="observacoes" rows="2"></textarea></label>
         <div class="aviso erro oculto" id="erro-pedido"></div>
-        <button class="botao largo" type="submit" id="enviar-pedido">Confirmar pedido</button>
+        <button class="botao largo" type="submit" id="enviar-pedido">${textoBotao}</button>
         <small style="color:var(--taupe)" id="nota-pedido"></small>
       </form>
       <aside class="resumo">
@@ -778,7 +851,7 @@ async function paginaFinalizar(main, id) {
         ${estado.sacola.map((i) => itemSacolaHtml(i, false)).join("")}
         <div class="linha-resumo"><span>Peças</span><span>${formatarPreco(totalDaSacola())}</span></div>
         <div class="linha-resumo"><span>Frete</span><span id="resumo-frete">—</span></div>
-        <div class="linha-resumo"><span>Pagamento</span><span id="resumo-pagamento">${dados.pagamento === "cartao" ? NOMES_PAGAMENTO.cartao : NOMES_PAGAMENTO.pix}</span></div>
+        <div class="linha-resumo"><span>Pagamento</span><span id="resumo-pagamento">${online ? "PIX ou cartão" : dados.pagamento === "cartao" ? NOMES_PAGAMENTO.cartao : NOMES_PAGAMENTO.pix}</span></div>
         <div class="linha-total"><span>Total</span><strong id="resumo-total">${formatarPreco(totalDaSacola())}</strong></div>
       </aside>
     </div>`;
@@ -832,6 +905,12 @@ async function paginaFinalizar(main, id) {
     else if (freteACombinar()) textoFrete = "A combinar";
     $("#resumo-frete").textContent = textoFrete;
     $("#resumo-total").textContent = formatarPreco(pecas + (opcao ? opcao.valor : 0));
+    if (online) {
+      $("#nota-pedido").textContent =
+        `As peças ficam reservadas por ${RESERVA_HORAS} horas enquanto você paga no Mercado Pago.` +
+        (ehEnvio() && freteACombinar() ? " Agora você paga as peças; o frete combinamos pelo WhatsApp." : "");
+      return;
+    }
     $("#nota-pedido").textContent =
       ehEnvio() && !freteACombinar()
         ? "Ao confirmar, as peças ficam reservadas para você e enviamos os dados de pagamento pelo WhatsApp."
@@ -918,9 +997,9 @@ async function paginaFinalizar(main, id) {
     erro.classList.add("oculto");
     const v = Object.fromEntries(new FormData(form).entries());
     const envio = v.entrega === "envio";
-    const pagamento = NOMES_PAGAMENTO[v.pagamento] || NOMES_PAGAMENTO.pix;
-    // A forma de pagamento escolhida vai na primeira linha das observações do pedido.
-    const observacoes = [`Pagamento: ${pagamento}`, (v.observacoes || "").trim()].filter(Boolean).join("\n");
+    const pagamento = online ? "" : NOMES_PAGAMENTO[v.pagamento] || NOMES_PAGAMENTO.pix;
+    // Sem a cobrança pelo site, a forma escolhida vai na primeira linha das observações do pedido.
+    const observacoes = [pagamento && `Pagamento: ${pagamento}`, (v.observacoes || "").trim()].filter(Boolean).join("\n");
     const endereco = {
       rua: (v.rua || "").trim(),
       numero: (v.numero || "").trim(),
@@ -1002,7 +1081,7 @@ async function paginaFinalizar(main, id) {
       falha = e2;
     }
     botao.disabled = false;
-    botao.textContent = "Confirmar pedido";
+    botao.textContent = textoBotao;
 
     if (falha) {
       mostrarErro(mensagemDeErro(falha));
@@ -1045,8 +1124,217 @@ async function paginaFinalizar(main, id) {
     estado.sacola = [];
     estado.resumo = null;
     salvarSacola();
+    if (online && UUID.test(data.id || "")) {
+      // Vai direto para o Mercado Pago. Se não abrir, a página do pedido oferece tentar de novo.
+      guardarPendente({ id: data.id, numero: data.numero });
+      botao.disabled = true;
+      botao.innerHTML = `<span class="girando"></span>`;
+      const r = await abrirPagamento(data.id);
+      if (r?.ok) return;
+      location.hash = `#/pagamento/${data.id}`;
+      return;
+    }
     location.hash = `#/pedido/${data.numero}`;
   });
+}
+
+/* ------------------------------------------------------------------ */
+/* Pagamento pelo site (volta do Mercado Pago)                         */
+/* ------------------------------------------------------------------ */
+
+function textoDaSituacao(p) {
+  const pago = ["pago", "enviado", "concluido"].includes(p.status) || p.situacao === "aprovado";
+  if (p.status === "cancelado" && !pago) {
+    return {
+      titulo: "A reserva terminou",
+      texto: "O pagamento não foi concluído a tempo e as peças voltaram para a vitrine.",
+    };
+  }
+  if (pago) {
+    const forma = p.forma === "PIX" ? "Recebemos seu PIX." : p.forma ? `Recebemos seu pagamento (${p.forma.toLowerCase()}).` : "Recebemos seu pagamento.";
+    let proximo = "Vamos chamar você no WhatsApp para combinar a retirada.";
+    if (p.entrega === "envio") {
+      proximo = p.frete
+        ? "Agora é com a gente: vamos embalar suas peças com cuidado e avisar pelo WhatsApp quando forem postadas."
+        : "Vamos chamar você no WhatsApp para combinar o frete.";
+    }
+    return { titulo: "Pagamento aprovado. Obrigada!", texto: `${forma} ${proximo}` };
+  }
+  if (p.situacao === "em_analise") {
+    return {
+      titulo: "Pagamento em análise",
+      texto: "O Mercado Pago está analisando o pagamento com cartão, o que costuma levar poucos minutos. Suas peças continuam reservadas.",
+    };
+  }
+  if (p.situacao === "divergente" || p.situacao === "devolvido" || !p.pode_pagar) {
+    return { titulo: "Recebemos seu pedido", texto: "Vamos chamar você no WhatsApp para combinar o pagamento." };
+  }
+  const ate = p.limite ? ` até ${horaCurta(p.limite)}` : "";
+  if (p.situacao === "pendente") {
+    return {
+      titulo: "Esperando o pagamento",
+      texto: `Assim que o pagamento cair, a confirmação aparece aqui sozinha. Suas peças estão reservadas${ate}.`,
+    };
+  }
+  if (p.situacao === "recusado") {
+    return {
+      titulo: "O pagamento não foi aprovado",
+      texto: `Você pode tentar de novo com PIX ou com outro cartão. Suas peças estão reservadas${ate}.`,
+    };
+  }
+  return {
+    titulo: "Falta pagar",
+    texto: `Suas peças estão reservadas${ate}. Pague com PIX ou cartão no Mercado Pago para garantir.`,
+  };
+}
+
+function resumoDoPedidoPago(p) {
+  if (!p.itens?.length) return "";
+  const f = p.frete;
+  const itens = p.itens.map((i) => itemSacolaHtml({ id: "", marca: "", tamanho: "", ...i }, false)).join("");
+  const totais = f
+    ? `<div class="linha-resumo"><span>Peças</span><span>${formatarPreco(p.total)}</span></div>
+       <div class="linha-resumo"><span>${escapar(nomeDoFrete(f))}<small>${prazoTexto(f.prazo_max, f.prazo_max)}</small></span><span>${formatarPreco(f.valor)}</span></div>
+       <div class="linha-total"><span>Total</span><strong>${formatarPreco(p.total + Number(f.valor))}</strong></div>`
+    : `<div class="linha-total"><span>${p.entrega === "envio" ? "Total das peças" : "Total"}</span><strong>${formatarPreco(p.total)}</strong></div>`;
+  const forma = p.forma ? `${p.forma}${p.parcelas > 1 ? ` em ${p.parcelas}x` : ""}` : "PIX ou cartão";
+  return `<div class="pedido-resumo">${itens}${totais}
+    <div class="linha-resumo"><span>Pagamento</span><span>${escapar(forma)}</span></div></div>`;
+}
+
+async function paginaPagamento(main, id, pedidoId) {
+  definirTitulo("Pagamento");
+  if (!UUID.test(pedidoId || "")) return paginaNaoEncontrada(main, "Não encontramos este pedido.");
+  pedidoId = pedidoId.toLowerCase();
+  main.innerHTML = `<div class="confirmacao"><div class="esqueleto" style="height:280px"></div></div>`;
+  const retorno = estado.retorno?.pedido === pedidoId ? estado.retorno : null;
+  estado.retorno = null;
+  let consultas = 0;
+
+  const desenhar = (p) => {
+    const c = estado.config;
+    const { titulo, texto } = textoDaSituacao(p);
+    const pago = ["pago", "enviado", "concluido"].includes(p.status) || p.situacao === "aprovado";
+    const temWhats = Boolean(numeroWhatsapp(c.whatsapp));
+    const falar = temWhats
+      ? `<a class="link rotulo" href="${linkWhatsapp(c.whatsapp, `Olá! Sobre o meu pedido nº ${p.numero} no site.`)}" target="_blank" rel="noopener">Falar com a loja</a>`
+      : "";
+    let botoes = `<a class="botao" href="#/colecao">${pago ? "Continuar olhando" : "Ver a coleção"}</a>${pago ? "" : falar}`;
+    if (p.pode_pagar && !pago) {
+      botoes = `<button class="botao argila" type="button" id="pagar-agora">Pagar agora</button>
+        <a class="link rotulo" href="#/colecao">Continuar olhando</a>${falar}`;
+    }
+    const aguardando = p.status === "novo" && ["pendente", "em_analise"].includes(p.situacao);
+    main.innerHTML = `
+      <div class="confirmacao">
+        <span class="rotulo">Pedido nº ${escapar(p.numero)}</span>
+        <h1>${escapar(titulo)}</h1>
+        <p>${escapar(texto)}</p>
+        ${aguardando ? `<p class="conferindo"><span class="girando"></span>Conferindo o pagamento…</p>` : ""}
+        <div class="botoes">${botoes}</div>
+        ${resumoDoPedidoPago(p)}
+      </div>`;
+    $("#pagar-agora")?.addEventListener("click", async (e) => {
+      const botao = e.currentTarget;
+      botao.disabled = true;
+      botao.innerHTML = `<span class="girando"></span>`;
+      const r = await abrirPagamento(pedidoId);
+      if (r?.ok || id !== idRender) return;
+      botao.disabled = false;
+      botao.textContent = "Pagar agora";
+      avisar(r?.erro || "Não foi possível abrir o pagamento agora. Tente de novo.", "erro");
+      if (r?.pedido) desenhar(r.pedido);
+    });
+  };
+
+  const consultar = async () => {
+    consultas++;
+    const corpo = { acao: "situacao", pedido: pedidoId };
+    // Na primeira consulta (e de vez em quando depois) confere direto no Mercado Pago.
+    if (consultas === 1 && retorno?.pagamento) corpo.pagamento = retorno.pagamento;
+    else if (consultas % 3 === 1) corpo.verificar = true;
+    let r = null;
+    try {
+      r = await chamarFuncao("pagamento", corpo);
+    } catch (e) {
+      r = { ok: false, erro: mensagemDeErro(e) };
+    }
+    if (id !== idRender) return;
+    if (!r?.ok || !r.pedido) {
+      if (consultas > 1) return; // a tela já mostra a última situação
+      main.innerHTML = `
+        <div class="confirmacao">
+          <span class="rotulo">Pagamento</span>
+          <h1>Não conseguimos carregar o pedido</h1>
+          <p>${escapar(r?.erro || "Tente de novo em instantes.")}</p>
+          <div class="botoes"><button class="botao" type="button" id="tentar-de-novo">Tentar de novo</button></div>
+        </div>`;
+      $("#tentar-de-novo").addEventListener("click", () => {
+        consultas = 0;
+        consultar();
+      });
+      return;
+    }
+    const p = r.pedido;
+    desenhar(p);
+    const terminou = ["pago", "enviado", "concluido", "cancelado"].includes(p.status) || p.situacao === "aprovado";
+    if (terminou) esquecerPendente(pedidoId);
+    else if (UUID.test(pedidoId) && !lerPendente()) guardarPendente({ id: pedidoId, numero: p.numero, limite: p.limite });
+    desenharAvisoPendente();
+    // Depois de voltar do Mercado Pago (ou com PIX gerado), acompanha até a confirmação chegar.
+    const andando = ["pendente", "em_analise"].includes(p.situacao);
+    const acompanhar = p.status === "novo" && (andando || (retorno && p.situacao === "aguardando"));
+    if (acompanhar && consultas < (andando ? 30 : 5)) {
+      setTimeout(() => {
+        if (id === idRender) consultar();
+      }, 6000);
+    }
+  };
+  await consultar();
+}
+
+/** Aviso discreto no topo quando há um pedido esperando pagamento neste aparelho. */
+function desenharAvisoPendente() {
+  const el = $("#aviso-pedido");
+  if (!el) return;
+  const p = lerPendente();
+  if (p?.limite && Date.now() > new Date(p.limite).getTime() + 60 * 60_000) {
+    esquecerPendente(p.id);
+    el.hidden = true;
+    return;
+  }
+  const rota = rotaAtual().partes[0];
+  const mostrar = Boolean(p) && rota !== "pagamento" && rota !== "finalizar";
+  el.hidden = !mostrar;
+  if (mostrar) {
+    el.innerHTML = `<span>Falta pagar o pedido nº ${escapar(p.numero)}${p.limite ? `, reservado até ${horaCurta(p.limite)}` : ""}.</span> <a href="#/pagamento/${p.id}">Pagar agora</a>`;
+  }
+}
+
+/** Confere uma vez por visita se o pedido pendente ainda espera pagamento. */
+async function conferirPendente() {
+  const p = lerPendente();
+  if (!p) return;
+  try {
+    const r = await chamarFuncao("pagamento", { acao: "situacao", pedido: p.id });
+    if (r?.ok && r.pedido && !r.pedido.pode_pagar) esquecerPendente(p.id);
+    else if (r?.ok && r.pedido?.limite) guardarPendente({ ...p, limite: r.pedido.limite });
+  } catch {
+    /* sem conexão: mantém o aviso */
+  }
+  desenharAvisoPendente();
+}
+
+/** Volta do Mercado Pago: ?pedido=<id>&payment_id=...  ->  #/pagamento/<id> */
+function lerRetornoDoPagamento() {
+  const busca = new URLSearchParams(location.search);
+  const pedido = busca.get("pedido") || busca.get("external_reference") || "";
+  if (!UUID.test(pedido)) return;
+  estado.retorno = {
+    pedido: pedido.toLowerCase(),
+    pagamento: soDigitos(busca.get("payment_id") || busca.get("collection_id") || ""),
+  };
+  history.replaceState(null, "", `${location.pathname}#/pagamento/${estado.retorno.pedido}`);
 }
 
 async function buscarCep(cep, form) {
@@ -1246,6 +1534,7 @@ async function renderizar() {
     a.classList.toggle("ativo", ativo);
   });
 
+  desenharAvisoPendente();
   const main = $("#conteudo");
   try {
     switch (partes[0]) {
@@ -1259,6 +1548,8 @@ async function renderizar() {
         return await paginaFinalizar(main, id);
       case "pedido":
         return paginaConfirmacao(main, id, partes[1]);
+      case "pagamento":
+        return await paginaPagamento(main, id, partes[1]);
       case "sobre":
         return paginaSobre(main);
       default:
@@ -1318,6 +1609,7 @@ function ligarEventos() {
 }
 
 async function iniciar() {
+  lerRetornoDoPagamento();
   ligarEventos();
   atualizarContador();
   desenharMoldura();
@@ -1328,6 +1620,7 @@ async function iniciar() {
   }
   desenharMoldura();
   renderizar();
+  if (rotaAtual().partes[0] !== "pagamento") conferirPendente();
 }
 
 iniciar();

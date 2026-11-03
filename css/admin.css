@@ -878,6 +878,22 @@
   color: var(--cafe-suave);
 }
 
+.pedido-pagamento.ok {
+  color: var(--ok);
+}
+
+.pedido-pagamento small {
+  color: var(--taupe);
+}
+
+.pedido-alerta {
+  padding: 8px 10px;
+  border-left: 2px solid var(--erro);
+  background: var(--areia);
+  color: var(--erro);
+  font-size: 13px;
+}
+
 .pedido-subtotal {
   display: flex;
   justify-content: space-between;
