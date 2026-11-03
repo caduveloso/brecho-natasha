@@ -1262,6 +1262,49 @@ main {
   margin: 14px 0 0;
 }
 
+/* Pagamento pelo site */
+.opcao-fixa {
+  cursor: default;
+  border-color: var(--cafe);
+  background: var(--linho-claro);
+}
+
+.confirmacao .conferindo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: -12px;
+  color: var(--taupe);
+  font-size: 14px;
+}
+
+.confirmacao .conferindo .girando {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+
+.aviso-pedido:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 4px 14px;
+  padding: 12px var(--margem);
+  background: var(--areia);
+  color: var(--cafe-suave);
+  font-size: 14px;
+  text-align: center;
+}
+
+.aviso-pedido a {
+  color: var(--argila-escura);
+  font-weight: 500;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+}
+
 /* Sobre */
 .sobre {
   display: grid;

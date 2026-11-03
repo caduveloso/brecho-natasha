@@ -1148,7 +1148,7 @@ function pedidoHtml(p) {
                 ? `<p class="pedido-frete">Frete a combinar</p>`
                 : ""
           }
-          ${obs.pagamento ? `<p>Pagamento: ${escapar(obs.pagamento)}</p>` : ""}
+          ${pagamentoHtml(p, obs)}
           ${obs.resto ? `<p style="color:var(--taupe)">“${escapar(obs.resto)}”</p>` : ""}
         </div>
         <div class="pedido-itens">
@@ -1209,6 +1209,79 @@ function mostrarLoja() {
   });
   desenharCategorias();
   carregarEnvio();
+  atualizarStatusPagamento();
+}
+
+/* ------------------------------------------------------------------ */
+/* Pagamento pelo site (Mercado Pago)                                  */
+/* ------------------------------------------------------------------ */
+
+async function atualizarStatusPagamento() {
+  const el = $("#status-pagamento");
+  const marcar = $("#pagamento-online");
+  const ligado = Boolean(estado.config?.pagamento_online);
+  marcar.checked = ligado;
+  el.textContent = "Verificando o Mercado Pago…";
+  let s = null;
+  try {
+    s = await chamarFuncao("pagamento", { acao: "status" });
+  } catch {
+    s = null;
+  }
+  if (!s?.ok) {
+    el.innerHTML = `<p>Não consegui verificar o Mercado Pago agora.${ligado ? " A cobrança pelo site continua ligada." : ""}</p>`;
+    marcar.disabled = !ligado;
+    return;
+  }
+  if (!s.conectado) {
+    el.innerHTML = `
+      ${
+        s.erro
+          ? `<p class="alerta"><strong>${escapar(s.erro)}</strong></p>`
+          : `<p><strong>Mercado Pago ainda não conectado.</strong> Enquanto isso, o pagamento é combinado pelo WhatsApp.</p>`
+      }
+      <p>Para cobrar por PIX e cartão no site:</p>
+      <ol>
+        <li>Use a conta Mercado Pago de quem recebe o dinheiro, com uma chave PIX cadastrada nela.</li>
+        <li>Com essa conta, abra <a class="link" href="https://www.mercadopago.com.br/developers/panel/app" target="_blank" rel="noopener">Suas integrações</a> e crie uma aplicação. Em <strong>Credenciais › Produção</strong>, toque em <strong>Ativar ambiente de produção</strong> (ele pede o setor e o site da loja).</li>
+        <li>Copie o <strong>Access Token</strong>, que começa com <code>APP_USR-</code>, e cadastre no Supabase, em <a class="link" href="${PAINEL_SEGREDOS}" target="_blank" rel="noopener">Edge Functions › Secrets</a>, com o nome <code>MERCADO_PAGO_ACCESS_TOKEN</code>.</li>
+        <li>Volte aqui e ligue a cobrança.</li>
+      </ol>`;
+    marcar.disabled = !ligado;
+    return;
+  }
+  const conta = s.conta?.apelido || s.conta?.email || "";
+  el.innerHTML = `
+    <p class="ok"><strong>Conectado ao Mercado Pago</strong>${conta ? ` (${escapar(conta)})` : ""}${s.teste ? ", com credenciais de teste" : ""}.</p>
+    <p>${ligado ? "O site está cobrando por PIX e cartão." : "Marque a opção abaixo para o site passar a cobrar por PIX e cartão."}</p>`;
+  marcar.disabled = false;
+}
+
+const TEXTO_PAGAMENTO = {
+  aguardando: "Aguardando pagamento pelo site",
+  pendente: "Pagamento iniciado, aguardando confirmação",
+  em_analise: "Pagamento em análise no Mercado Pago",
+  aprovado: "Pago pelo site",
+  recusado: "Pagamento recusado; a cliente pode tentar de novo",
+  expirado: "Reserva venceu sem pagamento",
+  devolvido: "Pagamento devolvido no Mercado Pago",
+  divergente: "Valor pago diferente do pedido",
+};
+
+/** Linha de pagamento do pedido: pelo site (Mercado Pago) ou combinado pelo WhatsApp. */
+function pagamentoHtml(p, obs) {
+  const s = p.pagamento_situacao || "";
+  if (!s) return obs.pagamento ? `<p>Pagamento: ${escapar(obs.pagamento)}</p>` : "";
+  let texto = TEXTO_PAGAMENTO[s] || s;
+  if (s === "aprovado" && p.pagamento_forma) {
+    texto += `: ${escapar(p.pagamento_forma)}${p.pagamento_parcelas > 1 ? ` em ${p.pagamento_parcelas}x` : ""}`;
+    if (p.pago_em) texto += ` · ${dataCurta(p.pago_em)}`;
+  } else if (["aguardando", "pendente", "recusado"].includes(s) && p.status === "novo" && p.pagamento_limite) {
+    texto += ` · reserva até ${dataCurta(p.pagamento_limite)}`;
+  }
+  const numero = p.pagamento_id ? ` <small>(Mercado Pago nº ${escapar(p.pagamento_id)})</small>` : "";
+  return `<p class="pedido-pagamento ${s === "aprovado" ? "ok" : ""}">${texto}${numero}</p>
+    ${p.pagamento_alerta ? `<p class="pedido-alerta">${escapar(p.pagamento_alerta)}</p>` : ""}`;
 }
 
 function desenharCategorias() {
@@ -1613,6 +1686,25 @@ function ligarEventos() {
     f.cep.value = dados.cep;
     avisar("Dados de envio salvos.");
     atualizarStatusEnvio();
+  });
+
+  // Pagamento pelo site
+  $("#pagamento-online").addEventListener("change", async (e) => {
+    const marcar = e.currentTarget;
+    const ligar = marcar.checked;
+    marcar.disabled = true;
+    const { error } = await sb
+      .from("loja_config")
+      .update({ pagamento_online: ligar, atualizado_em: new Date().toISOString() })
+      .eq("id", 1);
+    marcar.disabled = false;
+    if (error) {
+      marcar.checked = !ligar;
+      return avisar(mensagemDeErro(error), "erro");
+    }
+    estado.config = { ...estado.config, pagamento_online: ligar };
+    avisar(ligar ? "Cobrança pelo site ligada." : "Cobrança pelo site desligada. O pagamento volta a ser combinado pelo WhatsApp.");
+    atualizarStatusPagamento();
   });
 
   // Loja
